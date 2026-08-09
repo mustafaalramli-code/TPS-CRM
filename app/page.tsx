@@ -2,17 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
-type Row = { id: string; name: string; account: string; owner: string; value: string; status: string; date: string; phone?:string; region?:string; location?:string };
+type Row = { id: string; name: string; account: string; owner: string; value: string; status: string; date: string; phone?:string; email?:string; region?:string; location?:string };
 type WonProject = { id: string; customerId:string; name: string; type: string; status: string; progress: string; start: string; due: string };
 type CustomerOpportunity = { customerId:string; id:string; name:string; type:string; documentType?:string; value:string; stage:string; owner:string; close:string };
 const supplierNames = ["Gulf Industrial Supplies", "Schneider Electric Arabia", "Emerson Process Management", "Siemens Energy", "Al-Fanar Electrical Systems"];
 const clientContactDetails = [
-  {client:"Acme Industries",name:"Olivia Martin",phone:"+966 55 204 1180",region:"Riyadh",location:"Riyadh"},
-  {client:"Acme Industries",name:"Daniel Reed",phone:"+966 50 441 8270",region:"Eastern Province",location:"Dammam"},
-  {client:"Acme Industries",name:"Maya Hassan",phone:"+966 54 118 3095",region:"Western Region",location:"Jeddah"},
-  {client:"Northstar Labs",name:"James Wilson",phone:"+966 54 822 4012",region:"Riyadh",location:"Riyadh"},
-  {client:"Mira Systems",name:"Emma Thompson",phone:"+966 50 314 8870",region:"Eastern Province",location:"Al Khobar"},
-  {client:"Vertex Group",name:"Noah Anderson",phone:"+966 56 702 1994",region:"Western Region",location:"Jeddah"},
+  {client:"Acme Industries",name:"Olivia Martin",phone:"+966 55 204 1180",email:"olivia@acme.example",region:"Riyadh",location:"Riyadh"},
+  {client:"Acme Industries",name:"Daniel Reed",phone:"+966 50 441 8270",email:"daniel@acme.example",region:"Eastern Province",location:"Dammam"},
+  {client:"Acme Industries",name:"Maya Hassan",phone:"+966 54 118 3095",email:"maya@acme.example",region:"Western Region",location:"Jeddah"},
+  {client:"Northstar Labs",name:"James Wilson",phone:"+966 54 822 4012",email:"james@northstar.example",region:"Riyadh",location:"Riyadh"},
+  {client:"Mira Systems",name:"Emma Thompson",phone:"+966 50 314 8870",email:"emma@mira.example",region:"Eastern Province",location:"Al Khobar"},
+  {client:"Vertex Group",name:"Noah Anderson",phone:"+966 56 702 1994",email:"noah@vertex.example",region:"Western Region",location:"Jeddah"},
 ];
 
 const navigation = [
@@ -47,10 +47,10 @@ const records: Record<string, Row[]> = {
     { id:"PRJ-116", name:"CRM onboarding", account:"Mira Systems", owner:"Sarah Chen", value:"100%", status:"Completed", date:"Jul 29, 2026" },
   ],
   Contacts: [
-    { id:"CON-986", name:"Olivia Martin", account:"Acme Industries", owner:"Sales", value:"General Manager", status:"Primary", date:"Aug 2, 2026", phone:"+966 55 204 1180", region:"Riyadh", location:"Riyadh" },
-    { id:"CON-985", name:"James Wilson", account:"Northstar Labs", owner:"Projects", value:"Project Director", status:"Active", date:"Jul 30, 2026", phone:"+966 54 822 4012", region:"Riyadh", location:"Riyadh" },
-    { id:"CON-984", name:"Emma Thompson", account:"Mira Systems", owner:"Procurement", value:"Procurement Lead", status:"Active", date:"Jul 28, 2026", phone:"+966 50 314 8870", region:"Eastern Province", location:"Al Khobar" },
-    { id:"CON-983", name:"Noah Anderson", account:"Vertex Group", owner:"Engineering", value:"Technical Manager", status:"Primary", date:"Jul 25, 2026", phone:"+966 56 702 1994", region:"Western Region", location:"Jeddah" },
+    { id:"CON-986", name:"Olivia Martin", account:"Acme Industries", owner:"Sales", value:"General Manager", status:"Primary", date:"Aug 2, 2026", phone:"+966 55 204 1180", email:"olivia@acme.example", region:"Riyadh", location:"Riyadh" },
+    { id:"CON-985", name:"James Wilson", account:"Northstar Labs", owner:"Projects", value:"Project Director", status:"Active", date:"Jul 30, 2026", phone:"+966 54 822 4012", email:"james@northstar.example", region:"Riyadh", location:"Riyadh" },
+    { id:"CON-984", name:"Emma Thompson", account:"Mira Systems", owner:"Procurement", value:"Procurement Lead", status:"Active", date:"Jul 28, 2026", phone:"+966 50 314 8870", email:"emma@mira.example", region:"Eastern Province", location:"Al Khobar" },
+    { id:"CON-983", name:"Noah Anderson", account:"Vertex Group", owner:"Engineering", value:"Technical Manager", status:"Primary", date:"Jul 25, 2026", phone:"+966 56 702 1994", email:"noah@vertex.example", region:"Western Region", location:"Jeddah" },
   ],
   Suppliers: [
     { id:"SUP-073", name:"Apex Equipment", account:"Industrial systems", owner:"Sarah Chen", value:"SAR 820k", status:"Approved", date:"Aug 1, 2026" },
@@ -174,7 +174,7 @@ export default function Home() {
   const [opportunityContactName,setOpportunityContactName]=useState("");
   const opportunityClientName=opportunityClientContext||editingCustomer?.account||"";
   const opportunityContacts=useMemo(()=>{
-    const linked=[...contactListRows.filter(contact=>contact.account===opportunityClientName),...clientContactDetails.filter(contact=>contact.client===opportunityClientName).map((contact,index)=>({id:`linked-${index}`,name:contact.name,account:contact.client,owner:"",value:"",status:"Active",date:"",phone:contact.phone,region:contact.region,location:contact.location}))];
+    const linked=[...contactListRows.filter(contact=>contact.account===opportunityClientName),...clientContactDetails.filter(contact=>contact.client===opportunityClientName).map((contact,index)=>({id:`linked-${index}`,name:contact.name,account:contact.client,owner:"",value:"",status:"Active",date:"",phone:contact.phone,email:contact.email,region:contact.region,location:contact.location}))];
     return linked.filter((contact,index,all)=>all.findIndex(item=>item.name===contact.name)===index);
   },[contactListRows,opportunityClientName]);
   const opportunityContact=opportunityContacts.find(contact=>contact.name===opportunityContactName);
@@ -341,7 +341,7 @@ export default function Home() {
             <fieldset className="opportunity-reference-summary"><legend>Opportunity details</legend><div className="drawer-field-grid">
               <label>Client<select value={opportunityClientName} onChange={event=>{setOpportunityClientContext(event.target.value);setOpportunityContactName("")}}><option value="">Select...</option>{customerRows.map(client=><option key={client.id}>{client.name}</option>)}</select></label>
               <label>Contact Person<select value={opportunityContactName} onChange={event=>setOpportunityContactName(event.target.value)} disabled={!opportunityContacts.length}><option value="">{opportunityContacts.length?"Select client contact...":"No contacts linked to this client"}</option>{opportunityContacts.map(contact=><option key={contact.id} value={contact.name}>{contact.name}</option>)}</select></label>
-              <label>Telephone<input value={opportunityContact?.phone||""} readOnly/></label><label>Region<input value={opportunityContact?.region||""} readOnly/></label><label>Location<input value={opportunityContact?.location||""} readOnly/></label>
+              <label>Mobile #<input value={opportunityContact?.phone||""} readOnly/></label><label>Email<input type="email" value={opportunityContact?.email||""} readOnly/></label><label>Region<input value={opportunityContact?.region||""} readOnly/></label><label>Location<input value={opportunityContact?.location||""} readOnly/></label>
               <label>Opportunity Type<select defaultValue=""><option value="">Select...</option>{selectValues("Opportunity Type").map(value=><option key={value}>{value}</option>)}</select></label><label>Project Name<input defaultValue={editingCustomer?.name||""}/></label><label>Client Inquiry Status<select defaultValue={editingCustomer?.status||"On Hand"}><option>On Hand</option><option>Qualified</option><option>Proposal</option><option>Negotiation</option><option>Won</option></select></label><label>Document Type<select defaultValue="Offer"><option>Inquiry</option><option>Offer</option><option>Order</option><option>Secured</option></select></label><label>Employee<select defaultValue={editingCustomer?.owner||employeeRows[0]?.name||""}>{employeeRows.map(employee=><option key={employee.id}>{employee.name}</option>)}</select></label><label>Year<input type="number" defaultValue={new Date().getFullYear()}/></label>
             </div></fieldset>
             <nav className="opportunity-section-tabs reference-tabs" aria-label="Opportunity form pages"><button type="button" className={opportunitySection==="Inquiry Information"?"active":""} onClick={()=>setOpportunitySection("Inquiry Information")}>Inquiry Information</button><button type="button" className={opportunitySection==="History"?"active":""} onClick={()=>setOpportunitySection("History")}>History</button></nav>

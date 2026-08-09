@@ -38,7 +38,7 @@ const records: Record<string, Row[]> = {
     { id:"OPP-281", name:"Annual renewal", account:"Mira Systems", owner:"Sarah Chen", value:"$64,200", status:"Ready for delivery", date:"Aug 18, 2026" },
   ],
   Quotations: [
-    { id:"QUO-631", name:"Northstar phase II", account:"Northstar Labs", owner:"Sarah Chen", value:"$184,000", status:"Delivery Status", date:"Aug 1, 2026" },
+    { id:"QUO-631", name:"Northstar phase II", account:"Northstar Labs", owner:"Sarah Chen", value:"$184,000", status:"Delivered", date:"Aug 1, 2026" },
   ],
   Projects: [
     { id:"PRJ-119", name:"Q3 platform rollout", account:"Acme Industries", owner:"David Kim", value:"72%", status:"In progress", date:"Sep 12, 2026" },
@@ -510,12 +510,12 @@ function Metric({label,value,detail,kind="up"}:{label:string,value:string,detail
 
 function Overview({navigate,announce}:{navigate:(label:string)=>void,announce:(message:string)=>void}) {
   const opportunityStatusByMonth:Record<string,{status:string,count:number}[]>={
-    Mar:[{status:"Bidding",count:8},{status:"Proposal",count:5},{status:"Negotiation",count:3},{status:"Ready for delivery",count:2},{status:"Delivery Status",count:1}],
-    Apr:[{status:"Bidding",count:10},{status:"Proposal",count:6},{status:"Negotiation",count:4},{status:"Ready for delivery",count:3},{status:"Delivery Status",count:2}],
-    May:[{status:"Bidding",count:12},{status:"Proposal",count:8},{status:"Negotiation",count:5},{status:"Ready for delivery",count:4},{status:"Delivery Status",count:2}],
-    Jun:[{status:"Bidding",count:11},{status:"Proposal",count:9},{status:"Negotiation",count:6},{status:"Ready for delivery",count:5},{status:"Delivery Status",count:3}],
-    Jul:[{status:"Bidding",count:14},{status:"Proposal",count:10},{status:"Negotiation",count:7},{status:"Ready for delivery",count:6},{status:"Delivery Status",count:4}],
-    Aug:[{status:"Bidding",count:16},{status:"Proposal",count:12},{status:"Negotiation",count:9},{status:"Ready for delivery",count:7},{status:"Delivery Status",count:5}],
+    Mar:[{status:"Bidding",count:8},{status:"Proposal",count:5},{status:"Negotiation",count:3},{status:"Ready for delivery",count:2},{status:"Delivered",count:1}],
+    Apr:[{status:"Bidding",count:10},{status:"Proposal",count:6},{status:"Negotiation",count:4},{status:"Ready for delivery",count:3},{status:"Delivered",count:2}],
+    May:[{status:"Bidding",count:12},{status:"Proposal",count:8},{status:"Negotiation",count:5},{status:"Ready for delivery",count:4},{status:"Delivered",count:2}],
+    Jun:[{status:"Bidding",count:11},{status:"Proposal",count:9},{status:"Negotiation",count:6},{status:"Ready for delivery",count:5},{status:"Delivered",count:3}],
+    Jul:[{status:"Bidding",count:14},{status:"Proposal",count:10},{status:"Negotiation",count:7},{status:"Ready for delivery",count:6},{status:"Delivered",count:4}],
+    Aug:[{status:"Bidding",count:16},{status:"Proposal",count:12},{status:"Negotiation",count:9},{status:"Ready for delivery",count:7},{status:"Delivered",count:5}],
   };
   const [opportunityMonth,setOpportunityMonth]=useState("Aug");
   const statusRows=opportunityStatusByMonth[opportunityMonth];
@@ -535,7 +535,7 @@ function RecordsPage({module,query,filter,setFilter,announce,onNewContact,onEdit
   const [listSearch,setListSearch]=useState("");
   const rows=rowsOverride||records[module]||[]; const statuses=["All statuses",...Array.from(new Set(rows.map(r=>r.status)))];
   const shown=useMemo(()=>rows.filter(r=>(filter==="All statuses"||r.status===filter)&&Object.values(r).join(" ").toLowerCase().includes(query.toLowerCase())&&Object.values(r).join(" ").toLowerCase().includes(listSearch.toLowerCase())),[rows,query,listSearch,filter]);
-  const flowStages=module==="Opportunities"?["All statuses","Bidding","Proposal","Negotiation","Ready for delivery","Delivery Status"]:[];
+  const flowStages=module==="Opportunities"?["All statuses","Bidding","Proposal","Negotiation","Ready for delivery","Delivered"]:[];
   const valueLabel=module==="Projects"?"Progress":module==="Contacts"?"Job title":module==="Tasks"?"Priority":"Value";
   const displayedSourceCount=sourceCountOverride??sourceCounts[module]??rows.length;
   return <><div className="source-note"><span>Access database</span><strong>{displayedSourceCount} source records</strong><small>CRM-2026-V3 cloud</small></div><div className="module-metrics"><Metric label={`Total ${module==="Customers"?"clients":module.toLowerCase()}`} value={String(module==="Opportunities"&&filter!=="All statuses"?shown.length:displayedSourceCount)} detail={module==="Opportunities"&&filter!=="All statuses"?`${filter} opportunities shown`:"Found in the Access source"}/><Metric label="Active this month" value={String(rows.length?Math.max(1,rows.length*9):0)} detail="Ready for cloud migration"/><Metric label={module==="Projects"?"On schedule":module==="Contacts"?"Linked to clients":"Data readiness"} value={module==="Projects"?"86%":module==="Contacts"?"94%":"92%"} detail="Validated moments ago"/></div>{module==="Opportunities"&&<div className="opportunity-flow-filter" aria-label="Filter opportunities by flow"><div className="flow-filter-head"><div><span>PIPELINE FLOW</span><strong>Filter opportunities by commercial stage</strong></div><button type="button" onClick={()=>setFilter("All statuses")}>Reset flow</button></div><div className="flow-filter-stages">{flowStages.map((stage,index)=>{const count=stage==="All statuses"?rows.length:rows.filter(row=>row.status===stage).length;return <button type="button" key={stage} className={filter===stage?"active":""} onClick={()=>setFilter(stage)}><i>{index===0?"∞":index}</i><span>{stage==="All statuses"?"All":stage}</span><small>{count} record{count===1?"":"s"}</small></button>})}</div></div>}

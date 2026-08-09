@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 type Row = { id: string; name: string; account: string; owner: string; value: string; status: string; date: string };
 type WonProject = { id: string; customerId:string; name: string; type: string; status: string; progress: string; start: string; due: string };
@@ -147,18 +147,7 @@ function VoiceTextarea({defaultValue="",onValueChange}:{defaultValue?:string,onV
   return <div className="voice-field"><textarea value={value} onChange={e=>{setValue(e.target.value);onValueChange?.(e.target.value)}} placeholder="Type or use the microphone..."/><button type="button" className={listening?"listening":""} onClick={toggleVoice} aria-label={listening?"Stop voice typing":"Start voice typing"}><span>MIC</span>{listening?" Stop listening":" Dictate"}</button>{message&&<small>{message}</small>}</div>;
 }
 
-function LoginScreen({onLogin}:{onLogin:(token:string)=>void}) {
-  const [username,setUsername]=useState("");
-  const [password,setPassword]=useState("");
-  const [error,setError]=useState("");
-  const [submitting,setSubmitting]=useState(false);
-  async function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();setError("");setSubmitting(true);try{const url=process.env.NEXT_PUBLIC_SUPABASE_URL;const key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;if(!url||!key)throw new Error("Authentication is not configured.");const response=await fetch(`${url}/auth/v1/token?grant_type=password`,{method:"POST",headers:{apikey:key,"Content-Type":"application/json"},body:JSON.stringify({email:username.trim(),password})});const payload=await response.json();if(!response.ok||!payload.access_token)throw new Error("Incorrect email or password.");onLogin(payload.access_token)}catch(reason){setError(reason instanceof Error?reason.message:"Unable to sign in.")}finally{setSubmitting(false)}}
-  return <main className="login-screen"><section className="login-card" aria-labelledby="login-title"><img src="/tps-logo.png" alt="Technology Products and Services Co."/><p className="login-eyebrow">TPS CLIENTCORE</p><h1 id="login-title">Sign in to your workspace</h1><p className="login-copy">Enter your authorized email and password to open the CRM.</p><form onSubmit={submit}><label>Email address<input type="email" autoFocus autoComplete="username" value={username} onChange={event=>setUsername(event.target.value)} placeholder="name@company.com" required/></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={event=>setPassword(event.target.value)} placeholder="Password" required/></label>{error&&<p className="login-error" role="alert">{error}</p>}<button type="submit" disabled={submitting}>{submitting?"Signing in...":"Sign in"}</button></form><small>Authorized TPS personnel only</small></section></main>;
-}
-
 export default function Home() {
-  const [authenticated,setAuthenticated]=useState(false);
-  const [authReady,setAuthReady]=useState(false);
   const [active, setActive] = useState("Overview");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("All statuses");
@@ -184,10 +173,6 @@ export default function Home() {
     {id:"QUO-631",customerId:"CUS-1048",name:"Control system phase II",value:"$184,000",status:"Draft",owner:"Sarah Chen",date:"Aug 1, 2026"},
     {id:"QUO-630",customerId:"CUS-1048",name:"Migration services",value:"$126,500",status:"Sent",owner:"David Kim",date:"Jul 30, 2026"},
   ]);
-  useEffect(()=>{const token=window.sessionStorage.getItem("tps-crm-auth");const url=process.env.NEXT_PUBLIC_SUPABASE_URL;const key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;if(!token||!url||!key){setAuthReady(true);return}fetch(`${url}/auth/v1/user`,{headers:{apikey:key,Authorization:`Bearer ${token}`}}).then(response=>setAuthenticated(response.ok)).catch(()=>setAuthenticated(false)).finally(()=>setAuthReady(true))},[]);
-  function login(token:string){window.sessionStorage.setItem("tps-crm-auth",token);setAuthenticated(true)}
-  function logout(){window.sessionStorage.removeItem("tps-crm-auth");setAuthenticated(false);setDrawer(false)}
-
   function navigate(label: string) { setActive(label); setQuery(""); setFilter("All statuses"); setDrawer(false); }
   function announce(message: string) { setNotice(message); window.setTimeout(() => setNotice(""), 2200); }
   function saveDrawer(e: any) {
@@ -307,15 +292,13 @@ export default function Home() {
     return()=>{form.removeEventListener("change",handleFormChange);endUserSelect?.removeEventListener("change",handleEndUserChange);projectStatusSelect?.removeEventListener("change",handleProjectStatusChange);supplierSelect?.removeEventListener("change",handleSupplierChange);equipmentSelect?.removeEventListener("change",handleEquipmentChange);currencySelects.forEach(select=>select.removeEventListener("change",handleCurrencyChange));materialSelect?.removeEventListener("change",handleMaterialChange);contactSelect?.remove();endUserSelect?.remove();supplierSelect?.remove();equipmentSelect?.remove();materialSelect?.remove();if(contactInput)contactInput.hidden=false;if(endUserInput)endUserInput.hidden=false;if(supplierInput)supplierInput.hidden=false;if(equipmentInput)equipmentInput.hidden=false;if(materialInput)materialInput.hidden=false};
   },[drawer,active,customerRows]);
 
-  if(!authReady)return <main className="login-screen" aria-label="Loading"><div className="login-loader"/></main>;
-  if(!authenticated)return <LoginScreen onLogin={login}/>;
   return <main className="app-shell">
     <header className="topbar">
       <button className="product-switcher" aria-label="Open product switcher" onClick={()=>announce("Product switcher opened")}>+</button>
       <button className="brand" onClick={() => navigate("Overview")}><strong>TPS</strong><span>ClientCore</span></button>
       <div className="top-spacer" />
       <label className="search"><span aria-hidden="true">S</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Search ${active.toLowerCase()}...`} aria-label={`Search ${active}`} /></label>
-      <button className="icon-btn" aria-label="Help" onClick={()=>announce("Help center opened")}>?</button><button className="icon-btn notification" aria-label="Notifications" onClick={()=>announce("No new notifications")}>N<i /></button><button className="logout-button" onClick={logout}>Sign out</button>
+      <button className="icon-btn" aria-label="Help" onClick={()=>announce("Help center opened")}>?</button><button className="icon-btn notification" aria-label="Notifications" onClick={()=>announce("No new notifications")}>N<i /></button>
     </header>
 
     <aside className="sidebar"><nav aria-label="Primary navigation"><p className="eyebrow">Workspace</p>

@@ -290,6 +290,13 @@ export default function Home() {
     const labels=Array.from(form.querySelectorAll("label"));
     const projectStartInput=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Start Date")?.querySelector("input") as HTMLInputElement|null;
     if(projectStartInput){projectStartInput.setAttribute("type","date");projectStartInput.removeAttribute("placeholder");if(projectStartInput.value&&!/^\d{4}-\d{2}-\d{2}$/.test(projectStartInput.value))projectStartInput.value="";projectStartInput.addEventListener("click",()=>projectStartInput.showPicker?.())}
+    const projectEndInput=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Estimated End Date")?.querySelector("input") as HTMLInputElement|null;
+    if(active==="Projects"&&projectStartInput&&projectEndInput&&!labels.some(label=>label.childNodes[0]?.textContent?.trim()==="Duration (Days)")){
+      projectEndInput.setAttribute("type","date");if(projectEndInput.value&&!/^\d{4}-\d{2}-\d{2}$/.test(projectEndInput.value))projectEndInput.value="";
+      const durationLabel=document.createElement("label");durationLabel.append("Duration (Days)");const durationInput=document.createElement("input");durationInput.readOnly=true;durationInput.placeholder="Calculated automatically";durationLabel.appendChild(durationInput);projectEndInput.closest(".drawer-field-grid")?.appendChild(durationLabel);
+      const calculateDuration=()=>{projectEndInput.min=projectStartInput.value;if(!projectStartInput.value||!projectEndInput.value){durationInput.value="";return;}const days=Math.ceil((new Date(`${projectEndInput.value}T00:00:00`).getTime()-new Date(`${projectStartInput.value}T00:00:00`).getTime())/86400000);durationInput.value=String(Math.max(0,days))};
+      projectStartInput.addEventListener("change",calculateDuration);projectEndInput.addEventListener("change",calculateDuration);calculateDuration();
+    }
     const projectTypeLabel=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Project Type");
     const projectTypeInput=projectTypeLabel?.querySelector("input");
     if(active==="Projects"&&projectTypeLabel&&projectTypeInput){const select=document.createElement("select");select.replaceChildren(new Option("Select...",""),...projectTypeValues.map(value=>new Option(value,value)),new Option("Add / edit project types...","__manage_project_types"));projectTypeInput.replaceWith(select)}

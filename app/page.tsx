@@ -170,6 +170,8 @@ export default function Home() {
   const [taskRows, setTaskRows] = useState<Row[]>(records.Tasks);
   const [equipmentValues,setEquipmentValues]=useState(["Pumps","Valves","Control Panels","Instrumentation","Water Treatment Package","Electrical Equipment"]);
   useEffect(()=>{try{const saved=window.localStorage.getItem("tps-equipment-values");if(saved)setEquipmentValues(JSON.parse(saved))}catch{}},[]);
+  const [projectTypeValues,setProjectTypeValues]=useState(["Supply","Service"]);
+  useEffect(()=>{try{const saved=window.localStorage.getItem("tps-project-type-values");if(saved)setProjectTypeValues(JSON.parse(saved))}catch{}},[]);
   const [opportunityRows, setOpportunityRows] = useState<Row[]>(records.Opportunities);
   const [opportunityHistory,setOpportunityHistory]=useState<Record<string,string[]>>({});
   const [opportunityComment,setOpportunityComment]=useState("");
@@ -280,7 +282,7 @@ export default function Home() {
     if(active==="Projects"&&projectStartInput){projectStartInput.type="date";if(projectStartInput.value&&!/^\d{4}-\d{2}-\d{2}$/.test(projectStartInput.value))projectStartInput.value=""}
     const projectTypeLabel=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Project Type");
     const projectTypeInput=projectTypeLabel?.querySelector("input");
-    if(active==="Projects"&&projectTypeLabel&&projectTypeInput){const select=document.createElement("select");select.replaceChildren(new Option("Select...",""),new Option("Supply","Supply"),new Option("Service","Service"),new Option("Add / edit project types...","__manage_project_types"));projectTypeInput.replaceWith(select)}
+    if(active==="Projects"&&projectTypeLabel&&projectTypeInput){const select=document.createElement("select");select.replaceChildren(new Option("Select...",""),...projectTypeValues.map(value=>new Option(value,value)),new Option("Add / edit project types...","__manage_project_types"));projectTypeInput.replaceWith(select)}
     const clientSelect=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Client")?.querySelector("select") as HTMLSelectElement|null;
     const contactLabel=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Contact Person");
     const contactInput=contactLabel?.querySelector("input") as HTMLInputElement|null;
@@ -321,7 +323,7 @@ export default function Home() {
     currencySelects.forEach(select=>select.addEventListener("change",handleCurrencyChange));
     materialSelect?.addEventListener("change",handleMaterialChange);
     return()=>{form.removeEventListener("change",handleFormChange);endUserSelect?.removeEventListener("change",handleEndUserChange);projectStatusSelect?.removeEventListener("change",handleProjectStatusChange);supplierSelect?.removeEventListener("change",handleSupplierChange);equipmentSelect?.removeEventListener("change",handleEquipmentChange);currencySelects.forEach(select=>select.removeEventListener("change",handleCurrencyChange));materialSelect?.removeEventListener("change",handleMaterialChange);contactSelect?.remove();endUserSelect?.remove();supplierSelect?.remove();equipmentSelect?.remove();materialSelect?.remove();if(contactInput)contactInput.hidden=false;if(endUserInput)endUserInput.hidden=false;if(supplierInput)supplierInput.hidden=false;if(equipmentInput)equipmentInput.hidden=false;if(materialInput)materialInput.hidden=false};
-  },[drawer,active,customerRows]);
+  },[drawer,active,customerRows,projectTypeValues]);
 
   return <main className="app-shell">
     <header className="topbar">
@@ -344,7 +346,7 @@ export default function Home() {
 
       {active === "Overview" && <Overview navigate={navigate} announce={announce} />}
       {["Customers","Contacts","Opportunities","Projects","Suppliers","Activities","Tasks","Employees"].includes(active) && <RecordsPage module={active} rowsOverride={active==="Customers"?customerRows:active==="Contacts"?contactListRows:active==="Employees"?employeeRows:active==="Tasks"?taskRows:active==="Opportunities"?[...opportunityRows,...quotationRows]:undefined} query={query} filter={filter} setFilter={setFilter} announce={announce} onNewContact={() => { setEditingCustomer(null); setCustomerPage("Contacts"); setContactRows([1]); setDrawer(true); }} onDeleteCommercial={record=>{if(window.confirm(`Delete ${record.name} from the commercial list?`)){record.id.startsWith("QUO-")?setQuotationRows(rows=>rows.filter(row=>row.id!==record.id)):setOpportunityRows(rows=>rows.filter(row=>row.id!==record.id));announce(`${record.name} deleted`)}}} onDeleteContact={contact=>{if(window.confirm(`Delete ${contact.name} from the contact list?`)){setContactListRows(rows=>rows.filter(row=>row.id!==contact.id));announce(`${contact.name} deleted`)}}} onDeleteCustomer={customer=>{if(window.confirm(`Delete ${customer.name} from the client list?`)){setCustomerRows(rows=>rows.filter(row=>row.id!==customer.id));announce(`${customer.name} deleted`)}}} onDeleteEmployee={employee=>{if(window.confirm(`Delete ${employee.name} from the employee list?`)){setEmployeeRows(rows=>rows.filter(row=>row.id!==employee.id));announce(`${employee.name} deleted`)}}} onEditCustomer={customer => { setEditingCustomer(customer); if(active==="Opportunities"){setOpportunityClientContext(customer.account);setOpportunityContactName("")} setCustomerPage("General"); setOpportunitySection("Inquiry Information"); setContactRows([1]); setDrawer(true); }} />}
-      {active === "Directory" && <Directory announce={announce} targetGroup={directoryTarget} equipmentValues={equipmentValues} onEquipmentChange={setEquipmentValues} />}
+      {active === "Directory" && <Directory announce={announce} targetGroup={directoryTarget} equipmentValues={equipmentValues} onEquipmentChange={setEquipmentValues} projectTypeValues={projectTypeValues} onProjectTypeChange={setProjectTypeValues} />}
       {active === "Reports" && <Reports announce={announce} />}
     </section>
 
@@ -577,7 +579,7 @@ function ReportDetail({name,range}:{name:string,range:string}) {
   return <article className="panel report-detail"><div className="panel-head"><div><h2>{name}</h2><p>{range} · Updated today</p></div><button className="secondary" onClick={()=>window.print()}>Print report</button></div><div className="table-scroll"><table><thead><tr>{headings.map(heading=><th key={heading}>{heading}</th>)}</tr></thead><tbody>{rows[name].map((row,index)=><tr key={`${name}-${index}`}>{row.map(value=><td key={value}>{value}</td>)}</tr>)}</tbody></table></div></article>;
 }
 
-function Directory({announce,targetGroup,equipmentValues,onEquipmentChange}:{announce:(x:string)=>void,targetGroup:string,equipmentValues:string[],onEquipmentChange:Dispatch<SetStateAction<string[]>>}) {
+function Directory({announce,targetGroup,equipmentValues,onEquipmentChange,projectTypeValues,onProjectTypeChange}:{announce:(x:string)=>void,targetGroup:string,equipmentValues:string[],onEquipmentChange:Dispatch<SetStateAction<string[]>>,projectTypeValues:string[],onProjectTypeChange:Dispatch<SetStateAction<string[]>>}) {
   const groups=[
     {code:"RG",color:"blue",title:"Regions",count:3,detail:"Regional sales territories"},
     {code:"BR",color:"cyan",title:"Branches",count:3,detail:"Client-linked branch facilities"},
@@ -587,6 +589,7 @@ function Directory({announce,targetGroup,equipmentValues,onEquipmentChange}:{ann
     {code:"EQ",color:"cyan",title:"Equipment",count:6,detail:"Commercial equipment lookup values"},
     {code:"DT",color:"blue",title:"Document types",count:9,detail:"Opportunity document type lookup values"},
     {code:"OT",color:"green",title:"Opportunity types",count:6,detail:"Commercial opportunity type lookup values"},
+    {code:"PT",color:"purple",title:"Project types",count:projectTypeValues.length,detail:"Supply and service project classifications"},
     {code:"SE",color:"red",title:"System settings",count:4,detail:"Application preferences"},
   ];
   const directoryRows:Record<string,string[][]>={
@@ -598,6 +601,7 @@ function Directory({announce,targetGroup,equipmentValues,onEquipmentChange}:{ann
     Equipment:equipmentValues.map((name,index)=>[`EQ-${String(index+1).padStart(3,"0")}`,name,"Commercial equipment","Active"]),
     "Document types":selectValues("Document Type").map((name,index)=>[`DT-${String(index+1).padStart(2,"0")}`,name,"Opportunity document","Active"]),
     "Opportunity types":selectValues("Opportunity Type").map((name,index)=>[`OT-${String(index+1).padStart(2,"0")}`,name,"Commercial opportunity","Active"]),
+    "Project types":projectTypeValues.map((name,index)=>[`PT-${String(index+1).padStart(2,"0")}`,name,"Project classification","Active"]),
     "System settings":[["SET-01","Default currency","SAR","Enabled"],["SET-02","Default user","Alex Morgan","Enabled"],["SET-03","Date format","DD/MM/YYYY","Enabled"],["SET-04","Notifications","On","Enabled"]],
   };
   const [activeGroup,setActiveGroup]=useState(()=>groups.find(group=>group.title===targetGroup)||groups[0]);
@@ -615,6 +619,7 @@ function Directory({announce,targetGroup,equipmentValues,onEquipmentChange}:{ann
     const nextRows=existingIndex>=0?rows.map((row,index)=>index===existingIndex?record:row):[...rows,record];
     setDirectoryData(data=>({...data,[activeGroup.title]:nextRows}));
     if(activeGroup.title==="Equipment"){const values=nextRows.map(row=>row[1]);onEquipmentChange(values);window.localStorage.setItem("tps-equipment-values",JSON.stringify(values))}
+    if(activeGroup.title==="Project types"){const values=nextRows.map(row=>row[1]);onProjectTypeChange(values);window.localStorage.setItem("tps-project-type-values",JSON.stringify(values))}
     setSelectedRow(null);announce(`${activeGroup.title} information saved`);
   };
   return <><div className="source-note"><span>Access database</span><strong>Reference and lookup facilities</strong><small>Live prototype mapping</small></div><div className="directory-grid">{groups.map(g=><button key={g.title} className={activeGroup.title===g.title?"selected":""} onClick={()=>{setActiveGroup(g);setSelectedRow(null);announce(`${g.title} directory opened`)}}><span className={`directory-icon ${g.color}`}>{g.code}</span><div><small>{directoryData[g.title]?.length||0} records</small><h2>{g.title}</h2><p>{g.detail}</p></div><b>-&gt;</b></button>)}</div><article className="panel directory-records"><div className="panel-head"><div><h2>{activeGroup.title}</h2><p>{activeGroup.detail}</p></div><button className="secondary" onClick={()=>{setSelectedRow(["","","","Active"]);announce(`New ${activeGroup.title} record form opened`)}}>+ New record</button></div>{selectedRow?<fieldset><legend>{selectedRow[1]||`New ${activeGroup.title} record`}</legend><div className="drawer-field-grid"><label>Record ID<input value={selectedRow[0]} onChange={event=>updateDirectoryField(0,event.target.value)} placeholder="Generated automatically"/></label><label>Name<input value={selectedRow[1]} onChange={event=>updateDirectoryField(1,event.target.value)}/></label><label>Value / Region<input value={selectedRow[2]} onChange={event=>updateDirectoryField(2,event.target.value)}/></label><label>Status<select value={selectedRow[3]} onChange={event=>updateDirectoryField(3,event.target.value)}><option>Active</option><option>Enabled</option><option>Inactive</option></select></label></div><div className="directory-actions"><button onClick={()=>setSelectedRow(null)}>Back to list</button><button onClick={saveDirectoryRecord}>{rows.some(row=>row[0]===selectedRow[0]&&selectedRow[0])?"Save changes":"Add record"}</button></div></fieldset>:<div className="table-scroll"><table><thead><tr><th>ID</th><th>Name</th><th>Value / Region</th><th>Status</th></tr></thead><tbody>{rows.map(row=><tr key={row[0]} className="record-row" onClick={()=>setSelectedRow([...row])}><td><span className="record-id">{row[0]}</span></td><td><strong>{row[1]}</strong></td><td>{row[2]}</td><td><Status value={row[3]}/></td></tr>)}</tbody></table></div>}</article></>;

@@ -279,7 +279,7 @@ export default function Home() {
     const currencySelects=Array.from(form.querySelectorAll("label")).filter(label=>label.childNodes[0]?.textContent?.trim()==="Currency").map(label=>label.querySelector("select")).filter((select):select is HTMLSelectElement=>Boolean(select));currencySelects.forEach(select=>{if(!select.querySelector('option[value="__manage_currencies"]')){const option=document.createElement("option");option.value="__manage_currencies";option.textContent="Add / modify currencies...";select.appendChild(option)}});
     const labels=Array.from(form.querySelectorAll("label"));
     const projectStartInput=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Start Date")?.querySelector("input") as HTMLInputElement|null;
-    if(active==="Projects"&&projectStartInput){projectStartInput.type="date";if(projectStartInput.value&&!/^\d{4}-\d{2}-\d{2}$/.test(projectStartInput.value))projectStartInput.value=""}
+    if(projectStartInput){projectStartInput.setAttribute("type","date");projectStartInput.removeAttribute("placeholder");if(projectStartInput.value&&!/^\d{4}-\d{2}-\d{2}$/.test(projectStartInput.value))projectStartInput.value="";projectStartInput.addEventListener("click",()=>projectStartInput.showPicker?.())}
     const projectTypeLabel=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Project Type");
     const projectTypeInput=projectTypeLabel?.querySelector("input");
     if(active==="Projects"&&projectTypeLabel&&projectTypeInput){const select=document.createElement("select");select.replaceChildren(new Option("Select...",""),...projectTypeValues.map(value=>new Option(value,value)),new Option("Add / edit project types...","__manage_project_types"));projectTypeInput.replaceWith(select)}

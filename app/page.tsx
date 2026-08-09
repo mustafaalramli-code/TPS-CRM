@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
-type Row = { id: string; name: string; account: string; owner: string; value: string; status: string; date: string };
+type Row = { id: string; name: string; account: string; owner: string; value: string; status: string; date: string; phone?:string; region?:string; location?:string };
 type WonProject = { id: string; customerId:string; name: string; type: string; status: string; progress: string; start: string; due: string };
 type CustomerOpportunity = { customerId:string; id:string; name:string; type:string; documentType?:string; value:string; stage:string; owner:string; close:string };
 const supplierNames = ["Gulf Industrial Supplies", "Schneider Electric Arabia", "Emerson Process Management", "Siemens Energy", "Al-Fanar Electrical Systems"];
@@ -47,10 +47,10 @@ const records: Record<string, Row[]> = {
     { id:"PRJ-116", name:"CRM onboarding", account:"Mira Systems", owner:"Sarah Chen", value:"100%", status:"Completed", date:"Jul 29, 2026" },
   ],
   Contacts: [
-    { id:"CON-986", name:"Olivia Martin", account:"Acme Industries", owner:"Sales", value:"General Manager", status:"Primary", date:"Aug 2, 2026" },
-    { id:"CON-985", name:"James Wilson", account:"Northstar Labs", owner:"Projects", value:"Project Director", status:"Active", date:"Jul 30, 2026" },
-    { id:"CON-984", name:"Emma Thompson", account:"Mira Systems", owner:"Procurement", value:"Procurement Lead", status:"Active", date:"Jul 28, 2026" },
-    { id:"CON-983", name:"Noah Anderson", account:"Vertex Group", owner:"Engineering", value:"Technical Manager", status:"Primary", date:"Jul 25, 2026" },
+    { id:"CON-986", name:"Olivia Martin", account:"Acme Industries", owner:"Sales", value:"General Manager", status:"Primary", date:"Aug 2, 2026", phone:"+966 55 204 1180", region:"Riyadh", location:"Riyadh" },
+    { id:"CON-985", name:"James Wilson", account:"Northstar Labs", owner:"Projects", value:"Project Director", status:"Active", date:"Jul 30, 2026", phone:"+966 54 822 4012", region:"Riyadh", location:"Riyadh" },
+    { id:"CON-984", name:"Emma Thompson", account:"Mira Systems", owner:"Procurement", value:"Procurement Lead", status:"Active", date:"Jul 28, 2026", phone:"+966 50 314 8870", region:"Eastern Province", location:"Al Khobar" },
+    { id:"CON-983", name:"Noah Anderson", account:"Vertex Group", owner:"Engineering", value:"Technical Manager", status:"Primary", date:"Jul 25, 2026", phone:"+966 56 702 1994", region:"Western Region", location:"Jeddah" },
   ],
   Suppliers: [
     { id:"SUP-073", name:"Apex Equipment", account:"Industrial systems", owner:"Sarah Chen", value:"SAR 820k", status:"Approved", date:"Aug 1, 2026" },
@@ -338,7 +338,7 @@ function CustomerQuotationList({customer,contacts,announce,employees,items,setIt
   const [selected,setSelected]=useState<Row|null>(null);const [isNew,setIsNew]=useState(false);const [detailView,setDetailView]=useState<"Inquiry Information"|"History">("Inquiry Information");const [historyById,setHistoryById]=useState<Record<string,string[]>>({});const nameRef=useRef<HTMLInputElement>(null);const valueRef=useRef<HTMLInputElement>(null);const ownerRef=useRef<HTMLSelectElement>(null);const noteRef=useRef<HTMLTextAreaElement>(null);
   const customerItems=items.filter(item=>item.account===customer?.name);
   const fallbackContact=customer?.account&&customer.account!=="No primary contact"&&!/^[+\d]/.test(customer.account)?[{client:customer.name,name:customer.account,phone:"",region:"",location:""}]:[];
-  const contactOptions=[...clientContactDetails.filter(contact=>contact.client===customer?.name),...contacts.filter(contact=>contact.account===customer?.name).map(contact=>({client:contact.account,name:contact.name,phone:"",region:"",location:""})),...fallbackContact].filter((contact,index,list)=>list.findIndex(item=>item.name===contact.name)===index);
+  const contactOptions=[...clientContactDetails.filter(contact=>contact.client===customer?.name),...contacts.filter(contact=>contact.account===customer?.name).map(contact=>({client:contact.account,name:contact.name,phone:contact.phone||"",region:contact.region||"",location:contact.location||""})),...fallbackContact].filter((contact,index,list)=>list.findIndex(item=>item.name===contact.name)===index);
   const [contactName,setContactName]=useState(contactOptions[0]?.name||"");
   const primaryContact=contactOptions.find(contact=>contact.name===contactName);
   const save=()=>{const name=nameRef.current?.value.trim();if(!name){announce("Project Name is required");return;}const statusLabel=Array.from(document.querySelectorAll("label")).find(label=>label.childNodes[0]?.textContent?.trim()==="Client Inquiry Status");const status=(statusLabel?.querySelector("select") as HTMLSelectElement|null)?.value||selected?.status||"On Hand";const item:Row={id:selected?.id||`OPP-${285+items.length}`,name,account:customer?.name||"",value:valueRef.current?.value.trim()||selected?.value||"$0",status,owner:ownerRef.current?.value||selected?.owner||"Alex Morgan",date:new Date().toLocaleDateString()};const note=noteRef.current?.value.trim()||"";const historyEntry=`${new Date().toLocaleString()} — ${selected?"Updated":"Created"}: ${item.name}; status ${item.status}; value ${item.value}; handled by ${item.owner}${note?`; note: ${note}`:""}`;setHistoryById(history=>({...history,[item.id]:[historyEntry,...(history[item.id]||[])]}));if(status==="Won"){onWon({id:item.id.replace(/^QUO|^OPP/,"PRJ"),customerId:customer?.id||"",name:item.name,type:"Opportunity conversion",status:"New",progress:"0%",start:new Date().toLocaleDateString(),due:"To be scheduled"});setItems(rows=>rows.filter(row=>row.id!==item.id));setSelected(null);setIsNew(false);announce("Won opportunity transferred to the Project list");return;}setItems(rows=>selected?rows.map(row=>row.id===selected.id?item:row):[item,...rows]);setSelected(null);setIsNew(false);announce(note?"Opportunity saved and note moved to History":"Opportunity saved in the client and workspace lists")};

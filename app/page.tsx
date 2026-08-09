@@ -586,10 +586,10 @@ function Directory({announce,targetGroup,equipmentValues,onEquipmentChange,proje
     {code:"EU",color:"purple",title:"End users",count:28,detail:"Referenced project owners"},
     {code:"CT",color:"green",title:"Account categories",count:4,detail:"Separate client and supplier classifications"},
     {code:"CO",color:"orange",title:"Countries & states",count:4,detail:"Address lookup tables"},
+    {code:"PT",color:"purple",title:"Project types",count:projectTypeValues.length,detail:"Supply and service project classifications"},
     {code:"EQ",color:"cyan",title:"Equipment",count:6,detail:"Commercial equipment lookup values"},
     {code:"DT",color:"blue",title:"Document types",count:9,detail:"Opportunity document type lookup values"},
     {code:"OT",color:"green",title:"Opportunity types",count:6,detail:"Commercial opportunity type lookup values"},
-    {code:"PT",color:"purple",title:"Project types",count:projectTypeValues.length,detail:"Supply and service project classifications"},
     {code:"SE",color:"red",title:"System settings",count:4,detail:"Application preferences"},
   ];
   const directoryRows:Record<string,string[][]>={
@@ -605,6 +605,7 @@ function Directory({announce,targetGroup,equipmentValues,onEquipmentChange,proje
     "System settings":[["SET-01","Default currency","SAR","Enabled"],["SET-02","Default user","Alex Morgan","Enabled"],["SET-03","Date format","DD/MM/YYYY","Enabled"],["SET-04","Notifications","On","Enabled"]],
   };
   const [activeGroup,setActiveGroup]=useState(()=>groups.find(group=>group.title===targetGroup)||groups[0]);
+  useEffect(()=>{const target=groups.find(group=>group.title===targetGroup);if(target)setActiveGroup(target)},[targetGroup]);
   const [selectedRow,setSelectedRow]=useState<string[]|null>(null);
   const [directoryData,setDirectoryData]=useState<Record<string,string[][]>>(directoryRows);
   useEffect(()=>{const group=groups.find(item=>item.title===targetGroup);if(group){setActiveGroup(group);setSelectedRow(null)}},[targetGroup]);

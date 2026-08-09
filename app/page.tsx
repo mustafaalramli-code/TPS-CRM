@@ -175,9 +175,17 @@ export default function Home() {
   const opportunityClientName=opportunityClientContext||editingCustomer?.account||"";
   const opportunityContacts=useMemo(()=>{
     const linked=[...contactListRows.filter(contact=>contact.account===opportunityClientName),...clientContactDetails.filter(contact=>contact.client===opportunityClientName).map((contact,index)=>({id:`linked-${index}`,name:contact.name,account:contact.client,owner:"",value:"",status:"Active",date:"",phone:contact.phone,email:contact.email,region:contact.region,location:contact.location}))];
-    return linked.filter((contact,index,all)=>all.findIndex(item=>item.name===contact.name)===index);
+    const unique=linked.filter((contact,index,all)=>all.findIndex(item=>item.name===contact.name)===index);
+    return opportunityClientName?[...unique,{id:"__add_contact",name:"+ Add new contact...",account:opportunityClientName,owner:"",value:"",status:"",date:"",phone:"",email:"",region:"",location:""}]:unique;
   },[contactListRows,opportunityClientName]);
   const opportunityContact=opportunityContacts.find(contact=>contact.name===opportunityContactName);
+  useEffect(()=>{
+    if(opportunityContactName!=="+ Add new contact...")return;
+    const client=customerRows.find(item=>item.name===opportunityClientName);
+    setOpportunityContactName("");
+    if(!client){announce("Choose a client before adding a contact");return;}
+    setActive("Customers");setEditingCustomer(client);setCustomerPage("Contacts");setContactRows([Number(client.id.replace(/\D/g,""))]);setDrawer(true);
+  },[opportunityContactName,opportunityClientName,customerRows]);
   useEffect(()=>setOpportunityComment(""),[editingCustomer?.id]);
   function addOpportunityComment(){const comment=opportunityComment.trim();if(!comment){announce("Enter a comment first");return;}if(!editingCustomer?.id){announce("Save the opportunity before adding comments to History");return;}const entry=`${new Date().toLocaleString()} — ${comment}`;setOpportunityHistory(history=>({...history,[editingCustomer.id]:[...(history[editingCustomer.id]||[]),entry]}));setOpportunityComment("");announce("Comment added to History with date and time");}
   const [customerOpportunityRows,setCustomerOpportunityRows]=useState<CustomerOpportunity[]>([

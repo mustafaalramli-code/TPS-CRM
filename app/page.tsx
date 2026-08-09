@@ -352,8 +352,8 @@ export default function Home() {
     </header>
 
     <aside className="sidebar"><nav aria-label="Primary navigation"><p className="eyebrow">Workspace</p>
-      {navigation.map(item => <button key={item.label} className={active===item.label?"active":""} onClick={() => navigate(item.label)}><span className={`nav-icon ${item.color}`}>{item.icon}</span>{item.label==="Customers"?"Clients":item.label}</button>)}
-      <p className="eyebrow lower">Manage</p><button className={active==="Employees"?"active":""} onClick={() => navigate("Employees")}><span>TM</span>Team & access</button><button className={active==="Directory"&&directoryTarget==="System settings"?"active":""} onClick={() => {setDirectoryTarget("System settings");navigate("Directory")}}><span>ST</span>Settings</button>
+      {navigation.map(item => <button key={item.label} className={active===item.label?"active":""} onClick={() => navigate(item.label)}><span className={`nav-icon ${item.color}`}>{item.icon}</span>{item.label==="Customers"?"Clients":item.label==="Directory"?"Settings":item.label}</button>)}
+      <p className="eyebrow lower">Manage</p><button className={active==="Employees"?"active":""} onClick={() => navigate("Employees")}><span>TM</span>Team & access</button>
     </nav><div className="org-card"><span className="org-mark">W</span><div><strong>Westfield & Co.</strong><small>Enterprise plan</small></div><span>^</span></div></aside>
 
     <section className="workspace">

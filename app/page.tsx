@@ -5,15 +5,8 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateActio
 type Row = { id: string; name: string; account: string; owner: string; value: string; status: string; date: string; phone?:string; email?:string; region?:string; location?:string };
 type WonProject = { id: string; customerId:string; name: string; type: string; status: string; progress: string; start: string; due: string };
 type CustomerOpportunity = { customerId:string; id:string; name:string; type:string; documentType?:string; value:string; stage:string; owner:string; close:string };
-const supplierNames = ["Gulf Industrial Supplies", "Schneider Electric Arabia", "Emerson Process Management", "Siemens Energy", "Al-Fanar Electrical Systems"];
-const clientContactDetails = [
-  {client:"Acme Industries",name:"Olivia Martin",phone:"+966 55 204 1180",email:"olivia@acme.example",region:"Riyadh",location:"Riyadh"},
-  {client:"Acme Industries",name:"Daniel Reed",phone:"+966 50 441 8270",email:"daniel@acme.example",region:"Eastern Province",location:"Dammam"},
-  {client:"Acme Industries",name:"Maya Hassan",phone:"+966 54 118 3095",email:"maya@acme.example",region:"Western Region",location:"Jeddah"},
-  {client:"Northstar Labs",name:"James Wilson",phone:"+966 54 822 4012",email:"james@northstar.example",region:"Riyadh",location:"Riyadh"},
-  {client:"Mira Systems",name:"Emma Thompson",phone:"+966 50 314 8870",email:"emma@mira.example",region:"Eastern Province",location:"Al Khobar"},
-  {client:"Vertex Group",name:"Noah Anderson",phone:"+966 56 702 1994",email:"noah@vertex.example",region:"Western Region",location:"Jeddah"},
-];
+const supplierNames: string[] = [];
+const clientContactDetails: {client:string;name:string;phone:string;email:string;region:string;location:string}[] = [];
 
 const navigation = [
   { icon:"OV", label:"Overview", color:"blue" }, { icon:"CU", label:"Customers", color:"purple" },
@@ -25,57 +18,11 @@ const navigation = [
 ];
 
 const records: Record<string, Row[]> = {
-  Customers: [
-    { id:"CUS-1048", name:"Acme Industries", account:"Olivia Martin", owner:"Sarah Chen", value:"$128,400", status:"Active", date:"Aug 2, 2026" },
-    { id:"CUS-1047", name:"Northstar Labs", account:"James Wilson", owner:"David Kim", value:"$92,750", status:"Active", date:"Jul 30, 2026" },
-    { id:"CUS-1046", name:"Mira Systems", account:"Emma Thompson", owner:"Sarah Chen", value:"$71,200", status:"At risk", date:"Jul 28, 2026" },
-    { id:"CUS-1045", name:"Vertex Group", account:"Noah Anderson", owner:"Alex Morgan", value:"$54,800", status:"Active", date:"Jul 25, 2026" },
-  ],
-  Opportunities: [
-    { id:"OPP-284", name:"Northstar expansion", account:"Northstar Labs", owner:"Sarah Chen", value:"$184,000", status:"Proposal", date:"Sep 15, 2026" },
-    { id:"OPP-283", name:"Cloud migration", account:"Acme Industries", owner:"David Kim", value:"$126,500", status:"Negotiation", date:"Aug 28, 2026" },
-    { id:"OPP-282", name:"Analytics platform", account:"Vertex Group", owner:"Alex Morgan", value:"$98,000", status:"Bidding", date:"Oct 4, 2026" },
-    { id:"OPP-281", name:"Annual renewal", account:"Mira Systems", owner:"Sarah Chen", value:"$64,200", status:"Ready for delivery", date:"Aug 18, 2026" },
-  ],
-  Quotations: [
-    { id:"QUO-631", name:"Northstar phase II", account:"Northstar Labs", owner:"Sarah Chen", value:"$184,000", status:"Delivered", date:"Aug 1, 2026" },
-  ],
-  Projects: [
-    { id:"PRJ-119", name:"Q3 platform rollout", account:"Acme Industries", owner:"David Kim", value:"72%", status:"In progress", date:"Sep 12, 2026" },
-    { id:"PRJ-118", name:"Data consolidation", account:"Northstar Labs", owner:"Sarah Chen", value:"45%", status:"In progress", date:"Oct 2, 2026" },
-    { id:"PRJ-117", name:"Customer portal", account:"Vertex Group", owner:"Alex Morgan", value:"91%", status:"Review", date:"Aug 16, 2026" },
-    { id:"PRJ-116", name:"CRM onboarding", account:"Mira Systems", owner:"Sarah Chen", value:"100%", status:"Completed", date:"Jul 29, 2026" },
-  ],
-  Contacts: [
-    { id:"CON-986", name:"Olivia Martin", account:"Acme Industries", owner:"Sales", value:"General Manager", status:"Primary", date:"Aug 2, 2026", phone:"+966 55 204 1180", email:"olivia@acme.example", region:"Riyadh", location:"Riyadh" },
-    { id:"CON-985", name:"James Wilson", account:"Northstar Labs", owner:"Projects", value:"Project Director", status:"Active", date:"Jul 30, 2026", phone:"+966 54 822 4012", email:"james@northstar.example", region:"Riyadh", location:"Riyadh" },
-    { id:"CON-984", name:"Emma Thompson", account:"Mira Systems", owner:"Procurement", value:"Procurement Lead", status:"Active", date:"Jul 28, 2026", phone:"+966 50 314 8870", email:"emma@mira.example", region:"Eastern Province", location:"Al Khobar" },
-    { id:"CON-983", name:"Noah Anderson", account:"Vertex Group", owner:"Engineering", value:"Technical Manager", status:"Primary", date:"Jul 25, 2026", phone:"+966 56 702 1994", email:"noah@vertex.example", region:"Western Region", location:"Jeddah" },
-  ],
-  Suppliers: [
-    { id:"SUP-073", name:"Apex Equipment", account:"Industrial systems", owner:"Sarah Chen", value:"SAR 820k", status:"Approved", date:"Aug 1, 2026" },
-    { id:"SUP-072", name:"Gulf Controls", account:"Instrumentation", owner:"David Kim", value:"SAR 465k", status:"Approved", date:"Jul 27, 2026" },
-    { id:"SUP-071", name:"FlowTech GmbH", account:"Pumps and valves", owner:"Alex Morgan", value:"EUR 92k", status:"Review", date:"Jul 22, 2026" },
-    { id:"SUP-070", name:"Prime Automation", account:"Control panels", owner:"Sarah Chen", value:"SAR 310k", status:"Active", date:"Jul 18, 2026" },
-  ],
-  Activities: [
-    { id:"ACT-001", name:"Customer follow-up", account:"Acme Industries", owner:"Sarah Chen", value:"Phone call", status:"Completed", date:"Aug 4, 2026" },
-    { id:"ACT-002", name:"Technical clarification", account:"Northstar Labs", owner:"David Kim", value:"Meeting", status:"Scheduled", date:"Aug 6, 2026" },
-    { id:"ACT-003", name:"Supplier offer review", account:"FlowTech GmbH", owner:"Alex Morgan", value:"Review", status:"In progress", date:"Aug 7, 2026" },
-  ],
-  Tasks: [
-    { id:"TSK-041", name:"Submit revised offer", account:"Northstar Labs", owner:"Sarah Chen", value:"High", status:"In progress", date:"Aug 6, 2026" },
-    { id:"TSK-040", name:"Confirm delivery terms", account:"Apex Equipment", owner:"David Kim", value:"Medium", status:"Open", date:"Aug 8, 2026" },
-    { id:"TSK-039", name:"Upload CR documents", account:"Acme Industries", owner:"Alex Morgan", value:"Low", status:"Completed", date:"Aug 3, 2026" },
-  ],
-  Employees: [
-    { id:"EMP-001", name:"Alex Morgan", account:"Westfield & Co.", owner:"Sales", value:"Administrator", status:"Active", date:"Aug 4, 2026" },
-    { id:"EMP-002", name:"Sarah Chen", account:"Westfield & Co.", owner:"Business development", value:"Sales manager", status:"Active", date:"Aug 4, 2026" },
-    { id:"EMP-003", name:"David Kim", account:"Westfield & Co.", owner:"Projects", value:"Project manager", status:"Active", date:"Aug 3, 2026" },
-  ],
+  Customers: [], Opportunities: [], Quotations: [], Projects: [], Contacts: [],
+  Suppliers: [], Activities: [], Tasks: [], Employees: [],
 };
 
-const sourceCounts: Record<string, number> = { Customers:338, Contacts:986, Opportunities:171, Projects:66, Suppliers:73, Activities:1, Tasks:0, Employees:1 };
+const sourceCounts: Record<string, number> = { Customers:0, Contacts:0, Opportunities:0, Projects:0, Suppliers:0, Activities:0, Tasks:0, Employees:0 };
 
 const pageCopy: Record<string, [string, string]> = {
   Customers:["Maintain Clients", "Manage clients, contacts, and client health."],
@@ -106,7 +53,7 @@ function selectValues(field: string, module = "") {
 
 function customerFieldValue(field: string, customer: Row | null, module = "") {
   const isEmployeeField = field.includes("Handled") || field.includes("Assigned To") || field === "Employee" || field.includes("Responsible");
-  if (isEmployeeField) return customer?.owner || "Alex Morgan";
+  if (isEmployeeField) return customer?.owner || "";
   if (field === "Account Type" || field === "Client Type") return module === "Suppliers" ? "Supplier" : "Client";
   if (!customer) return "";
   if (module === "Employees") {
@@ -169,7 +116,7 @@ export default function Home() {
   const [customerRows, setCustomerRows] = useState<Row[]>(records.Customers);
   const [taskRows, setTaskRows] = useState<Row[]>(records.Tasks);
   const [projectRows,setProjectRows]=useState<Row[]>(records.Projects);
-  useEffect(()=>{try{const saved=window.localStorage.getItem("tps-project-rows");if(saved)setProjectRows(JSON.parse(saved))}catch{}},[]);
+  useEffect(()=>{try{const saved=window.localStorage.getItem("tps-user-project-rows");if(saved)setProjectRows(JSON.parse(saved))}catch{}},[]);
   const [equipmentValues,setEquipmentValues]=useState(["Pumps","Valves","Control Panels","Instrumentation","Water Treatment Package","Electrical Equipment"]);
   useEffect(()=>{try{const saved=window.localStorage.getItem("tps-equipment-values");if(saved)setEquipmentValues(JSON.parse(saved))}catch{}},[]);
   const [projectTypeValues,setProjectTypeValues]=useState(["Supply","Service"]);
@@ -195,11 +142,7 @@ export default function Home() {
   },[opportunityContactName,opportunityClientName,customerRows]);
   useEffect(()=>{setOpportunityComment("");setProjectWon(false);setProjectStatus("New");setProjectProgress(15)},[editingCustomer?.id]);
   function addOpportunityComment(){const comment=opportunityComment.trim();if(!comment){announce("Enter a comment first");return;}if(!editingCustomer?.id){announce("Save the opportunity before adding comments to History");return;}const entry=`${new Date().toLocaleString()} — ${comment}`;setOpportunityHistory(history=>({...history,[editingCustomer.id]:[...(history[editingCustomer.id]||[]),entry]}));setOpportunityComment("");announce("Comment added to History with date and time");}
-  const [customerOpportunityRows,setCustomerOpportunityRows]=useState<CustomerOpportunity[]>([
-    {customerId:"CUS-1048",id:"OPP-284",name:"Cloud migration",type:"New",value:"$126,500",stage:"Negotiation",owner:"David Kim",close:"2026-08-28"},
-    {customerId:"CUS-1048",id:"OPP-271",name:"Annual support renewal",type:"Re-bidding",value:"$42,000",stage:"Proposal",owner:"Sarah Chen",close:"2026-09-12"},
-    {customerId:"CUS-1047",id:"OPP-259",name:"Equipment upgrade",type:"New",value:"$88,750",stage:"Bidding",owner:"Alex Morgan",close:"2026-10-04"},
-  ]);
+  const [customerOpportunityRows,setCustomerOpportunityRows]=useState<CustomerOpportunity[]>([]);
   const [quotationRows, setQuotationRows] = useState<Row[]>(records.Quotations);
   function navigate(label: string) { setActive(label); setQuery(""); setFilter("All statuses"); setDrawer(false); }
   function announce(message: string) { setNotice(message); window.setTimeout(() => setNotice(""), 2200); }
@@ -243,7 +186,7 @@ export default function Home() {
       const progress=(form.querySelector(".project-progress-input") as HTMLInputElement|null)?.value||editingCustomer?.value||"0%";
       const project:Row={id:control("Project ID")||editingCustomer?.id||`PRJ-${String(120+projectRows.length).padStart(3,"0")}`,name:control("Project Name")||editingCustomer?.name||"New project",account:editingCustomer?.account||"Unassigned client",owner:editingCustomer?.owner||"Unassigned",value:progress.includes("%")?progress:`${progress}%`,status:control("Status")||editingCustomer?.status||"New",date:control("Estimated End Date")||editingCustomer?.date||new Date().toLocaleDateString()};
       const nextRows=editingCustomer?projectRows.map(row=>row.id===editingCustomer.id?project:row):[project,...projectRows];
-      setProjectRows(nextRows);window.localStorage.setItem("tps-project-rows",JSON.stringify(nextRows));setDrawer(false);setEditingCustomer(null);announce("Project changes saved and list updated");return;
+      setProjectRows(nextRows);window.localStorage.setItem("tps-user-project-rows",JSON.stringify(nextRows));setDrawer(false);setEditingCustomer(null);announce("Project changes saved and list updated");return;
     }
     if (active === "Opportunities" || active === "Quotations") {
       const form=e.currentTarget as HTMLFormElement;
@@ -268,7 +211,7 @@ export default function Home() {
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("view") === "customer") {
       setActive("Customers");
-      setEditingCustomer(records.Customers[0]);
+      setEditingCustomer(records.Customers[0]||null);
       setCustomerPage(new URLSearchParams(window.location.search).get("customerTab")==="quotation"?"Opportunities":"General");
       setDrawer(true);
     }
@@ -354,14 +297,14 @@ export default function Home() {
     <aside className="sidebar"><nav aria-label="Primary navigation"><p className="eyebrow">Workspace</p>
       {navigation.map(item => <button key={item.label} className={active===item.label?"active":""} onClick={() => navigate(item.label)}><span className={`nav-icon ${item.color}`}>{item.icon}</span>{item.label==="Customers"?"Clients":item.label==="Directory"?"Settings":item.label}</button>)}
       <p className="eyebrow lower">Manage</p><button className={active==="Employees"?"active":""} onClick={() => navigate("Employees")}><span>TM</span>Team & access</button>
-    </nav><div className="org-card"><span className="org-mark">W</span><div><strong>Westfield & Co.</strong><small>Enterprise plan</small></div><span>^</span></div></aside>
+    </nav><div className="org-card"><span className="org-mark">T</span><div><strong>TPS</strong><small>CRM workspace</small></div><span>^</span></div></aside>
 
     <section className="workspace">
-      <div className="page-heading"><div><p className="breadcrumb">ClientCore / {active==="Customers"?"Clients":active}</p><h1>{active==="Overview"?"Good morning, Alex":pageCopy[active]?.[0]}</h1><p>{active==="Overview"?"Here is what is happening across your business today.":pageCopy[active]?.[1]}</p></div>
+      <div className="page-heading"><div><p className="breadcrumb">ClientCore / {active==="Customers"?"Clients":active}</p><h1>{active==="Overview"?"Welcome to TPS CRM":pageCopy[active]?.[0]}</h1><p>{active==="Overview"?"Add your records to begin tracking your business.":pageCopy[active]?.[1]}</p></div>
         <div className="page-heading-actions"><img src="/tps-logo.png" alt="Technology Products and Services Co." />{!['Reports','Directory'].includes(active) && <button className="primary" onClick={() => { setEditingCustomer(null); if(active==="Opportunities"){setOpportunityClientContext("");setOpportunityContactName("")} setCustomerPage("General"); setOpportunitySection("Inquiry Information"); setContactRows([1]); setDrawer(true); }}><span>+</span>Add {actionName}</button>}{active === "Reports" && <button className="primary" onClick={() => announce("Report exported as CSV")}><span>D</span>Export report</button>}</div>
       </div>
 
-      {active === "Overview" && <Overview navigate={navigate} announce={announce} opportunities={[...opportunityRows,...quotationRows]} />}
+      {active === "Overview" && <Overview navigate={navigate} announce={announce} opportunities={[...opportunityRows,...quotationRows]} clients={customerRows} tasks={taskRows} />}
       {["Customers","Contacts","Opportunities","Projects","Suppliers","Activities","Tasks","Employees"].includes(active) && <RecordsPage module={active} rowsOverride={active==="Customers"?customerRows:active==="Contacts"?contactListRows:active==="Employees"?employeeRows:active==="Tasks"?taskRows:active==="Projects"?projectRows:active==="Opportunities"?[...opportunityRows,...quotationRows]:undefined} query={query} filter={filter} setFilter={setFilter} announce={announce} onNewContact={() => { setEditingCustomer(null); setCustomerPage("Contacts"); setContactRows([1]); setDrawer(true); }} onDeleteCommercial={record=>{if(window.confirm(`Delete ${record.name} from the commercial list?`)){record.id.startsWith("QUO-")?setQuotationRows(rows=>rows.filter(row=>row.id!==record.id)):setOpportunityRows(rows=>rows.filter(row=>row.id!==record.id));announce(`${record.name} deleted`)}}} onDeleteContact={contact=>{if(window.confirm(`Delete ${contact.name} from the contact list?`)){setContactListRows(rows=>rows.filter(row=>row.id!==contact.id));announce(`${contact.name} deleted`)}}} onDeleteCustomer={customer=>{if(window.confirm(`Delete ${customer.name} from the client list?`)){setCustomerRows(rows=>rows.filter(row=>row.id!==customer.id));announce(`${customer.name} deleted`)}}} onDeleteEmployee={employee=>{if(window.confirm(`Delete ${employee.name} from the employee list?`)){setEmployeeRows(rows=>rows.filter(row=>row.id!==employee.id));announce(`${employee.name} deleted`)}}} onEditCustomer={customer => { setEditingCustomer(customer); if(active==="Opportunities"){setOpportunityClientContext(customer.account);setOpportunityContactName("")} setCustomerPage("General"); setOpportunitySection("Inquiry Information"); setContactRows([1]); setDrawer(true); }} />}
       {active === "Directory" && <Directory announce={announce} targetGroup={directoryTarget} equipmentValues={equipmentValues} onEquipmentChange={setEquipmentValues} projectTypeValues={projectTypeValues} onProjectTypeChange={setProjectTypeValues} />}
       {active === "Reports" && <Reports announce={announce} />}
@@ -392,14 +335,7 @@ export default function Home() {
 
 function MultiContacts({rows,add,remove}:{rows:number[],add:()=>void,remove:(id:number)=>void}) {
   const clientId=`CUS-${rows[0]}`;
-  const contactData=[
-    {clientId:"CUS-1048",name:"Olivia Martin",job:"General Manager",department:"Management",phone:"+966 55 204 1180",email:"olivia@acme.example",role:"Primary"},
-    {clientId:"CUS-1048",name:"Daniel Reed",job:"Procurement Manager",department:"Procurement",phone:"+966 50 441 8270",email:"daniel@acme.example",role:"Commercial"},
-    {clientId:"CUS-1048",name:"Maya Hassan",job:"Project Engineer",department:"Engineering",phone:"+966 54 118 3095",email:"maya@acme.example",role:"Technical"},
-    {clientId:"CUS-1047",name:"James Wilson",job:"Project Director",department:"Projects",phone:"+966 54 822 4012",email:"james@northstar.example",role:"Primary"},
-    {clientId:"CUS-1046",name:"Emma Thompson",job:"Procurement Lead",department:"Procurement",phone:"+966 50 314 8870",email:"emma@mira.example",role:"Commercial"},
-    {clientId:"CUS-1045",name:"Noah Anderson",job:"Technical Manager",department:"Engineering",phone:"+966 56 702 1994",email:"noah@vertex.example",role:"Technical"},
-  ].filter(contact=>contact.clientId===clientId);
+  const contactData:{clientId:string;name:string;job:string;department:string;phone:string;email:string;role:string}[]=[];
   const [selected,setSelected]=useState<(typeof contactData)[number]|null>(null);
   const [isNew,setIsNew]=useState(false);
   if(selected||isNew){const contact=selected;return <section className="contact-detail"><div className="related-head"><div><button type="button" className="back-link" onClick={()=>{setSelected(null);setIsNew(false)}}>&lt;- Contact list</button><h3>{isNew?"New contact":contact?.name}</h3></div></div><fieldset><legend>Contact details</legend><div className="drawer-field-grid"><label>First Name<input defaultValue={contact?.name.split(" ")[0]||""}/></label><label>Last Name<input defaultValue={contact?.name.split(" ").slice(1).join(" ")||""}/></label><label>Job Title<input defaultValue={contact?.job||""}/></label><label>Department<input defaultValue={contact?.department||""}/></label><label>Business Phone<input defaultValue={contact?.phone||""}/></label><label>Mobile Phone<input defaultValue={contact?.phone||""}/></label><label>E-mail Address<input type="email" defaultValue={contact?.email||""}/></label><label>Role<select defaultValue={contact?.role||"Primary"}><option>Primary</option><option>Commercial</option><option>Technical</option><option>Finance</option></select></label><label className="contact-notes">Notes<textarea/></label></div></fieldset></section>}
@@ -467,11 +403,7 @@ function CustomerOpportunities({customer,employees,items,setItems,announce,onWon
 }
 
 function CustomerSuppliers({announce}:{announce:(message:string)=>void}) {
-  const suppliers=[
-    {id:"SUP-073",name:supplierNames[0],category:"Industrial equipment",scope:"Pumps, valves, control panels and mechanical spare parts",contact:"Omar Al-Salem",phone:"+966 55 810 2240",email:"omar@gulf-industrial.example",status:"Active"},
-    {id:"SUP-061",name:supplierNames[1],category:"Electrical systems",scope:"Switchgear, circuit breakers, PLCs and power distribution equipment",contact:"Nadia Faris",phone:"+966 50 412 8891",email:"nadia@schneider.example",status:"Active"},
-    {id:"SUP-054",name:supplierNames[2],category:"Process automation",scope:"Instrumentation, transmitters, control valves and automation systems",contact:"Khalid Mansour",phone:"+966 54 220 1478",email:"khalid@emerson.example",status:"Approved"},
-  ];
+  const suppliers:{id:string;name:string;category:string;scope:string;contact:string;phone:string;email:string;status:string}[]=[];
   const [selected,setSelected]=useState<(typeof suppliers)[number]|null>(null);
   const [savedMessage,setSavedMessage]=useState("");
   if(selected)return <section className="contact-detail"><div className="related-head"><div><button type="button" className="back-link" onClick={()=>setSelected(null)}>&lt;- Supplier list</button><h3>{selected.name}</h3></div><button type="button" onClick={()=>{const message=`Supplier data saved successfully at ${new Date().toLocaleTimeString()}`;setSavedMessage(message);announce(message)}}>Save supplier</button></div>{savedMessage&&<div className="save-confirmation" role="status"><strong>Saved</strong><span>{savedMessage}</span></div>}<fieldset><legend>Supplier details</legend><div className="drawer-field-grid"><label>Supplier ID<input defaultValue={selected.id}/></label><label>Supplier Name<input defaultValue={selected.name}/></label><label>Category<input defaultValue={selected.category}/></label><label>Status<select defaultValue={selected.status}><option>Active</option><option>Approved</option><option>Pending</option><option>Inactive</option></select></label><label className="contact-notes">Scope of Supply / What they sell<textarea required defaultValue={selected.scope} placeholder="Describe the products and services supplied"/></label><label>Contact Person<input defaultValue={selected.contact}/></label><label>Phone<input defaultValue={selected.phone}/></label><label>Email<input defaultValue={selected.email}/></label><label className="contact-notes">Notes<textarea/></label></div></fieldset></section>;
@@ -497,38 +429,25 @@ function CustomerProjects({customer,announce,wonProjects,workspaceProjects,initi
 }
 
 function CustomerActivities({announce}:{announce:(message:string)=>void}) {
-  const items=[
-    {id:"ACT-108",type:"Phone call",subject:"Offer follow-up",owner:"Sarah Chen",date:"Aug 4, 2026",status:"Completed",notes:"Client requested revised delivery terms."},
-    {id:"ACT-107",type:"Meeting",subject:"Technical clarification",owner:"David Kim",date:"Aug 2, 2026",status:"Completed",notes:"Reviewed scope and equipment specifications."},
-    {id:"ACT-106",type:"Email",subject:"Supplier offer shared",owner:"Alex Morgan",date:"Jul 30, 2026",status:"Completed",notes:"Sent preliminary commercial offer."},
-    {id:"ACT-105",type:"Site visit",subject:"Project readiness review",owner:"David Kim",date:"Aug 8, 2026",status:"Scheduled",notes:"Confirm access and installation requirements."},
-  ];
+  const items:{id:string;type:string;subject:string;owner:string;date:string;status:string;notes:string}[]=[];
   const [selected,setSelected]=useState<(typeof items)[number]|null>(null);
   const [isNew,setIsNew]=useState(false);
   const [descriptionDraft,setDescriptionDraft]=useState("");
   const [descriptionVersion,setDescriptionVersion]=useState(0);
-  const [historyEntries,setHistoryEntries]=useState<string[]>(["08/04/2026, 09:15 AM — Activity record created"]);
+  const [historyEntries,setHistoryEntries]=useState<string[]>([]);
   if(selected||isNew)return <section className="contact-detail"><div className="related-head"><div><button type="button" className="back-link" onClick={()=>{setSelected(null);setIsNew(false);setDescriptionDraft("")}}>&lt;- Activity list</button><h3>{isNew?"New activity":selected?.subject}</h3></div><button type="button" onClick={()=>{const description=descriptionDraft.trim();if(!description){announce("Write a description before saving");return;}setHistoryEntries(entries=>[`${new Date().toLocaleString()} — ${description}`,...entries]);setDescriptionDraft("");setDescriptionVersion(version=>version+1);announce("Description moved to history with date and time")}}>Save activity</button></div><fieldset><legend>Activity details</legend><div className="drawer-field-grid"><label>Activity ID<input defaultValue={selected?.id||"New"} readOnly={isNew}/></label><label>Activity Type<select defaultValue={selected?.type||"Phone call"}><option>Phone call</option><option>Meeting</option><option>Email</option><option>Site visit</option></select></label><label>Activity Date<input type="date" defaultValue={isNew?"2026-08-04":""}/></label><label>Assigned To<select defaultValue={selected?.owner||"Alex Morgan"}><option value="">Select TPS employee...</option><option>Alex Morgan</option><option>Sarah Chen</option><option>David Kim</option></select></label><label>Status<select defaultValue={selected?.status||"Scheduled"}><option>Scheduled</option><option>In progress</option><option>Completed</option><option>Cancelled</option></select></label><label>Subject<input required defaultValue={selected?.subject||""} placeholder="Activity subject"/></label><label className="contact-notes">Description / Notes<VoiceTextarea key={descriptionVersion} defaultValue="" onValueChange={setDescriptionDraft}/></label><label>Attachments<input type="file"/></label><label className="contact-notes history-field">History<textarea readOnly value={historyEntries.join("\n\n")}/><small>Save moves the description here and adds the current date and time.</small></label></div></fieldset></section>;
   return <section className="related-list"><div className="related-head"><div><h3>Activity list</h3><p>{items.length} activities linked to this customer</p></div><button type="button" onClick={()=>setIsNew(true)}>+ New activity</button></div><div className="table-scroll"><table><thead><tr><th>ID</th><th>Type</th><th>Subject</th><th>Owner</th><th>Date</th><th>Status</th></tr></thead><tbody>{items.map(item=><tr key={item.id} className="record-row" onClick={()=>setSelected(item)}><td><span className="record-id">{item.id}</span></td><td>{item.type}</td><td><strong>{item.subject}</strong></td><td>{item.owner}</td><td>{item.date}</td><td><Status value={item.status}/></td></tr>)}</tbody></table></div></section>;
 }
 
 function CustomerDeliveries({announce}:{announce:(message:string)=>void}) {
-  const items=[
-    {id:"DEL-028",project:"Q3 platform rollout",po:"PO-2026-184",item:"Control panels",qty:"4",status:"In transit",planned:"Aug 12, 2026",actual:"—",terms:"DAP Riyadh"},
-    {id:"DEL-027",project:"CRM onboarding",po:"PO-2026-121",item:"Server equipment",qty:"2",status:"Delivered",planned:"Jul 26, 2026",actual:"Jul 25, 2026",terms:"DDP Riyadh"},
-    {id:"DEL-026",project:"Equipment upgrade",po:"PO-2026-098",item:"Pumps and valves",qty:"18",status:"Preparing",planned:"Sep 4, 2026",actual:"—",terms:"CIF Dammam"},
-  ];
+  const items:{id:string;project:string;po:string;item:string;qty:string;status:string;planned:string;actual:string;terms:string}[]=[];
   const [selected,setSelected]=useState<(typeof items)[number]|null>(null); const [isNew,setIsNew]=useState(false);
   if(selected||isNew)return <section className="contact-detail"><div className="related-head"><div><button type="button" className="back-link" onClick={()=>{setSelected(null);setIsNew(false)}}>&lt;- Delivery list</button><h3>{isNew?"New delivery":selected?.id}</h3></div><button type="button" onClick={()=>{announce(isNew?"New delivery saved":"Delivery changes saved");setSelected(null);setIsNew(false)}}>Save delivery</button></div><fieldset><legend>Delivery details</legend><div className="drawer-field-grid"><label>Delivery ID<input defaultValue={selected?.id||"New"} readOnly={isNew}/></label><label>Project<input defaultValue={selected?.project||""}/></label><label>Customer PO<input defaultValue={selected?.po||""}/></label><label>Item / Equipment<input defaultValue={selected?.item||""}/></label><label>Quantity<input defaultValue={selected?.qty||""}/></label><label>Status<select defaultValue={selected?.status||"Preparing"}><option>Preparing</option><option>Ready to ship</option><option>In transit</option><option>Delivered</option><option>Delayed</option></select></label><label>Planned Delivery Date<input defaultValue={selected?.planned||""}/></label><label>Actual Delivery Date<input defaultValue={selected?.actual||""}/></label><label>Delivery Terms<input defaultValue={selected?.terms||""}/></label><label>Carrier<input/></label><label>Tracking Number<input/></label><label className="contact-notes">Delivery Notes<textarea/></label><label>Attachments<input type="file"/></label></div></fieldset></section>;
   return <section className="related-list"><div className="related-head"><div><h3>Delivery list</h3><p>{items.length} deliveries linked to this customer</p></div><button type="button" onClick={()=>setIsNew(true)}>+ New delivery</button></div><div className="table-scroll"><table><thead><tr><th>ID</th><th>Project</th><th>Customer PO</th><th>Item</th><th>Qty</th><th>Status</th><th>Planned date</th><th>Actual date</th></tr></thead><tbody>{items.map(item=><tr key={item.id} className="record-row" onClick={()=>setSelected(item)}><td><span className="record-id">{item.id}</span></td><td><strong>{item.project}</strong></td><td>{item.po}</td><td>{item.item}</td><td>{item.qty}</td><td><Status value={item.status}/></td><td>{item.planned}</td><td>{item.actual}</td></tr>)}</tbody></table></div></section>;
 }
 
 function CustomerTasks({announce}:{announce:(message:string)=>void}) {
-  const items=[
-    {id:"TSK-041",title:"Submit revised offer",priority:"High",status:"In progress",complete:"65%",owner:"Sarah Chen",start:"Aug 2, 2026",due:"Aug 6, 2026",description:"Update delivery terms and commercial validity."},
-    {id:"TSK-040",title:"Confirm technical scope",priority:"Medium",status:"Open",complete:"20%",owner:"David Kim",start:"Aug 3, 2026",due:"Aug 8, 2026",description:"Confirm equipment list with the project engineer."},
-    {id:"TSK-039",title:"Upload CR documents",priority:"Low",status:"Completed",complete:"100%",owner:"Alex Morgan",start:"Jul 28, 2026",due:"Aug 3, 2026",description:"Attach the latest company registration documents."},
-  ];
+  const items:{id:string;title:string;priority:string;status:string;complete:string;owner:string;start:string;due:string;description:string}[]=[];
   const [selected,setSelected]=useState<(typeof items)[number]|null>(null);
   if(selected)return <section className="contact-detail"><div className="related-head"><div><button type="button" className="back-link" onClick={()=>setSelected(null)}>&lt;- Task list</button><h3>{selected.title}</h3></div></div><fieldset><legend>Task details</legend><div className="drawer-field-grid"><label>Task ID<input defaultValue={selected.id}/></label><label>Title<input defaultValue={selected.title}/></label><label>Priority<select defaultValue={selected.priority}><option>Low</option><option>Medium</option><option>High</option><option>Urgent</option></select></label><label>Status<select defaultValue={selected.status}><option>Open</option><option>In progress</option><option>Completed</option><option>Cancelled</option></select></label><label>% Complete<input defaultValue={selected.complete}/></label><label>Assigned To<select defaultValue={selected.owner}><option value="">Select TPS employee...</option><option>Alex Morgan</option><option>Sarah Chen</option><option>David Kim</option></select></label><label>Start Date<input defaultValue={selected.start}/></label><label>Due Date<input defaultValue={selected.due}/></label><label className="contact-notes">Description<textarea defaultValue={selected.description}/></label><label>Attachments<input type="file"/></label></div></fieldset></section>;
   return <section className="related-list"><div className="related-head"><div><h3>Task list</h3><p>{items.length} tasks linked to this customer</p></div><button type="button" onClick={()=>announce("New task form opened")}>+ New task</button></div><div className="table-scroll"><table><thead><tr><th>ID</th><th>Task</th><th>Priority</th><th>Status</th><th>Complete</th><th>Assigned to</th><th>Due date</th></tr></thead><tbody>{items.map(item=><tr key={item.id} className="record-row" onClick={()=>setSelected(item)}><td><span className="record-id">{item.id}</span></td><td><strong>{item.title}</strong></td><td>{item.priority}</td><td><Status value={item.status}/></td><td>{item.complete}</td><td>{item.owner}</td><td>{item.due}</td></tr>)}</tbody></table></div></section>;
@@ -536,7 +455,7 @@ function CustomerTasks({announce}:{announce:(message:string)=>void}) {
 
 function Metric({label,value,detail,kind="up"}:{label:string,value:string,detail:string,kind?:string}) { return <article><div className="metric-top"><span>{label}</span><b>{kind==="up"?"+":"!"}</b></div><strong>{value}</strong><p><em className={kind==="warn"?"warning":""}>{detail}</em></p></article>; }
 
-function Overview({navigate,announce,opportunities}:{navigate:(label:string)=>void,announce:(message:string)=>void,opportunities:Row[]}) {
+function Overview({navigate,announce,opportunities,clients,tasks}:{navigate:(label:string)=>void,announce:(message:string)=>void,opportunities:Row[],clients:Row[],tasks:Row[]}) {
   const monthKey=(date:string)=>{const parsed=new Date(date);return Number.isNaN(parsed.getTime())?"Unscheduled":parsed.toLocaleDateString("en-US",{month:"short",year:"numeric"})};
   const availableMonths=Array.from(new Set(opportunities.map(row=>monthKey(row.date)))).sort((a,b)=>{if(a==="Unscheduled")return 1;if(b==="Unscheduled")return -1;return new Date(`1 ${a}`).getTime()-new Date(`1 ${b}`).getTime()});
   const currentMonth=new Date().toLocaleDateString("en-US",{month:"short",year:"numeric"});
@@ -547,14 +466,17 @@ function Overview({navigate,announce,opportunities}:{navigate:(label:string)=>vo
   const statusRows=reportStages.map(status=>({status,count:monthRecords.filter(row=>row.status===status).length}));
   const maxStatusCount=Math.max(1,...statusRows.map(row=>row.count));
   const biddingProjects=opportunities.filter(row=>row.status==="Bidding");
+  const pipelineValue=opportunities.reduce((total,row)=>total+(Number(row.value.replace(/[^0-9.-]/g,""))||0),0);
+  const openOpportunities=opportunities.filter(row=>!['Delivered','Completed','Closed'].includes(row.status)).length;
+  const dueTasks=tasks.filter(row=>row.status!=="Completed").length;
   return <>
-  <div className="metrics"><Metric label="Clients" value="1,248" detail="Up 8.4% from last month"/><Metric label="Open opportunities" value="84" detail="Up 12.1% from last month"/><Metric label="Pipeline value" value="$2.4M" detail="Up 5.7% from last month"/><Metric label="Tasks due" value="17" detail="5 overdue - needs attention" kind="warn"/></div>
+  <div className="metrics"><Metric label="Clients" value={String(clients.length)} detail={clients.length?"Client records available":"No clients added yet"}/><Metric label="Open opportunities" value={String(openOpportunities)} detail={openOpportunities?"Active commercial records":"No open opportunities"}/><Metric label="Pipeline value" value={`$${pipelineValue.toLocaleString()}`} detail={pipelineValue?"Current opportunity value":"No pipeline value recorded"}/><Metric label="Tasks due" value={String(dueTasks)} detail={dueTasks?"Open tasks requiring attention":"No tasks due"}/></div>
   <div className="main-grid"><article className="panel revenue opportunity-status-report"><div className="panel-head"><div><h2>Opportunity status report</h2><p>Live opportunity records grouped by close-date month</p></div><strong>{reportMonth}</strong></div><div className="opportunity-month-filter" aria-label="Select report month">{availableMonths.map(month=><button type="button" key={month} className={month===reportMonth?"active":""} onClick={()=>{setOpportunityMonth(month);announce(`Opportunity status report filtered by ${month}`)}}>{month}</button>)}</div><div className="status-report-bars" aria-label={`Opportunity status for ${reportMonth}`}>{statusRows.map(row=><div className="status-report-row" key={row.status}><span>{row.status}</span><div><i style={{width:row.count?`${Math.max(8,row.count/maxStatusCount*100)}%`:"0%"}}/></div><strong>{row.count}</strong></div>)}</div><p className="status-report-total">{monthRecords.length} total record{monthRecords.length===1?"":"s"} in {reportMonth}</p></article>
     <article className="panel activity bidding-project-report"><div className="panel-head"><div><h2>Bidding projects</h2><p>Opportunities currently in the bidding stage</p></div><strong>{biddingProjects.length}</strong></div><div className="bidding-project-list">{biddingProjects.map(project=><button type="button" key={project.id} onClick={()=>navigate("Opportunities")}><span className="bidding-project-id">{project.id}</span><strong>{project.name}</strong><small>{project.account}</small><div><span>{project.owner}</span><b>{project.value}</b></div><time>Due {project.date}</time></button>)}{!biddingProjects.length&&<p className="empty">No bidding projects are currently recorded.</p>}</div><button type="button" className="bidding-report-link" onClick={()=>navigate("Opportunities")}>View bidding opportunities -&gt;</button></article></div>
-  <article className="panel customers"><div className="panel-head"><div><h2>Priority clients</h2><p>Your highest-value active clients</p></div><button className="text-link" onClick={() => navigate("Customers")}>View all clients -&gt;</button></div><MiniCustomers /></article>
+  <article className="panel customers"><div className="panel-head"><div><h2>Priority clients</h2><p>Your highest-value active clients</p></div><button className="text-link" onClick={() => navigate("Customers")}>View all clients -&gt;</button></div><MiniCustomers clients={clients} /></article>
   </>; }
 
-function MiniCustomers(){ return <div className="table-scroll"><table><thead><tr><th>Client</th><th>Primary contact</th><th>Client value</th><th>Status</th></tr></thead><tbody>{records.Customers.map(r=><tr key={r.id}><td><span className="customer-avatar blue">{r.name.split(" ").map(x=>x[0]).join("")}</span><strong>{r.name}</strong></td><td>{r.account}</td><td>{r.value}</td><td><Status value={r.status}/></td></tr>)}</tbody></table></div>; }
+function MiniCustomers({clients}:{clients:Row[]}){ return <div className="table-scroll"><table><thead><tr><th>Client</th><th>Primary contact</th><th>Client value</th><th>Status</th></tr></thead><tbody>{clients.map(r=><tr key={r.id}><td><span className="customer-avatar blue">{r.name.split(" ").map(x=>x[0]).join("")}</span><strong>{r.name}</strong></td><td>{r.account}</td><td>{r.value}</td><td><Status value={r.status}/></td></tr>)}</tbody></table>{!clients.length&&<p className="empty">No clients added yet.</p>}</div>; }
 
 function Status({value}:{value:string}) { const positive=["Active","Accepted","Completed","In progress"].includes(value); const warning=["At risk","Expired"].includes(value); return <span className={`status-pill ${positive?"positive":warning?"danger":"neutral"}`}>{value}</span>; }
 
@@ -565,7 +487,7 @@ function RecordsPage({module,query,filter,setFilter,announce,onNewContact,onEdit
   const flowStages=module==="Opportunities"?["All statuses","Inquiry","Bidding","Proposal","Negotiation","Ready for delivery","Delivered"]:[];
   const valueLabel=module==="Projects"?"Progress":module==="Contacts"?"Job title":module==="Tasks"?"Priority":"Value";
   const displayedSourceCount=sourceCountOverride??sourceCounts[module]??rows.length;
-  return <><div className="source-note"><span>Access database</span><strong>{displayedSourceCount} source records</strong><small>CRM-2026-V3 cloud</small></div><div className="module-metrics"><Metric label={`Total ${module==="Customers"?"clients":module.toLowerCase()}`} value={String(module==="Opportunities"&&filter!=="All statuses"?shown.length:displayedSourceCount)} detail={module==="Opportunities"&&filter!=="All statuses"?`${filter} opportunities shown`:"Found in the Access source"}/><Metric label="Active this month" value={String(rows.length?Math.max(1,rows.length*9):0)} detail="Ready for cloud migration"/><Metric label={module==="Projects"?"On schedule":module==="Contacts"?"Linked to clients":"Data readiness"} value={module==="Projects"?"86%":module==="Contacts"?"94%":"92%"} detail="Validated moments ago"/></div>{module==="Opportunities"&&<div className="opportunity-flow-filter" aria-label="Filter opportunities by flow"><div className="flow-filter-head"><div><span>PIPELINE FLOW</span><strong>Filter opportunities by commercial stage</strong></div><button type="button" onClick={()=>setFilter("All statuses")}>Reset flow</button></div><div className="flow-filter-stages">{flowStages.map((stage,index)=>{const count=stage==="All statuses"?rows.length:rows.filter(row=>row.status===stage).length;return <button type="button" key={stage} className={filter===stage?"active":""} onClick={()=>setFilter(stage)}><i>{index===0?"∞":index}</i><span>{stage==="All statuses"?"All":stage}</span><small>{count} record{count===1?"":"s"}</small></button>})}</div></div>}
+  return <><div className="source-note"><span>CRM database</span><strong>{displayedSourceCount} records</strong><small>TPS CRM</small></div><div className="module-metrics"><Metric label={`Total ${module==="Customers"?"clients":module.toLowerCase()}`} value={String(module==="Opportunities"&&filter!=="All statuses"?shown.length:displayedSourceCount)} detail={module==="Opportunities"&&filter!=="All statuses"?`${filter} opportunities shown`:rows.length?"Saved in TPS CRM":"No records added yet"}/><Metric label="Active this month" value={String(rows.length?Math.max(1,rows.length*9):0)} detail={rows.length?"Current CRM activity":"No activity yet"}/><Metric label={module==="Projects"?"On schedule":module==="Contacts"?"Linked to clients":"Data readiness"} value={rows.length?(module==="Projects"?"86%":module==="Contacts"?"94%":"92%"):"0%"} detail={rows.length?"Validated moments ago":"No records to validate"}/></div>{module==="Opportunities"&&<div className="opportunity-flow-filter" aria-label="Filter opportunities by flow"><div className="flow-filter-head"><div><span>PIPELINE FLOW</span><strong>Filter opportunities by commercial stage</strong></div><button type="button" onClick={()=>setFilter("All statuses")}>Reset flow</button></div><div className="flow-filter-stages">{flowStages.map((stage,index)=>{const count=stage==="All statuses"?rows.length:rows.filter(row=>row.status===stage).length;return <button type="button" key={stage} className={filter===stage?"active":""} onClick={()=>setFilter(stage)}><i>{index===0?"∞":index}</i><span>{stage==="All statuses"?"All":stage}</span><small>{count} record{count===1?"":"s"}</small></button>})}</div></div>}
     <article className="panel records-panel"><div className="records-toolbar"><div className="segmented"><button className="selected" onClick={()=>setFilter("All statuses")}>All</button><button onClick={()=>setFilter(statuses[1])}>My records</button></div>{["Customers","Suppliers","Projects"].includes(module)&&<label className="list-search">Search<input type="search" value={listSearch} onChange={e=>setListSearch(e.target.value)} placeholder={`Search ${module==="Customers"?"clients":module.toLowerCase()}...`}/></label>}<label>{module==="Opportunities"?"Flow":"Status"}<select value={filter} onChange={e=>setFilter(e.target.value)}>{(module==="Opportunities"?flowStages:statuses).map(x=><option key={x}>{x}</option>)}</select></label><button className="secondary" onClick={()=>announce(`${module} list exported`)}>Download CSV</button></div>
       <div className="table-scroll"><table><thead><tr><th>ID</th><th>{module==="Customers"?"Client":module.slice(0,-1)}</th><th>Client / contact</th><th>Owner</th><th>{valueLabel}</th><th>Status</th><th>{(module==="Opportunities"||module==="Quotations")?"Close date":"Updated / due"}</th><th></th></tr></thead><tbody>{shown.map(r=><tr key={r.id} className="record-row" onClick={()=>(module==="Customers"||module==="Contacts"||module==="Activities"||module==="Employees"||module==="Tasks"||module==="Suppliers"||module==="Projects"||(module==="Opportunities"||module==="Quotations"))?onEditCustomer(r):announce(`${r.name} details opened`)}><td><span className="record-id">{r.id}</span></td><td><strong>{r.name}</strong></td><td>{r.account}</td><td>{r.owner}</td><td>{r.value}</td><td><Status value={r.status}/></td><td>{r.date}</td><td>{(module==="Customers"||module==="Contacts"||module==="Activities"||module==="Employees"||module==="Tasks"||module==="Suppliers"||module==="Projects"||(module==="Opportunities"||module==="Quotations"))?<div className="row-actions"><button type="button" className="open-record" onClick={e=>{e.stopPropagation();onEditCustomer(r)}}>Edit</button>{(module==="Opportunities"||module==="Quotations")&&<button type="button" className="delete-record" onClick={e=>{e.stopPropagation();onDeleteCommercial(r)}}>Del</button>}{module==="Contacts"&&<button type="button" className="delete-record" onClick={e=>{e.stopPropagation();onDeleteContact(r)}}>Del</button>}{module==="Customers"&&<button type="button" className="delete-record" onClick={e=>{e.stopPropagation();onDeleteCustomer(r)}}>Del</button>}{module==="Employees"&&<button type="button" className="delete-record" onClick={e=>{e.stopPropagation();onDeleteEmployee(r)}}>Del</button>}</div>:<button className="more" aria-label={`Open ${r.name}`} onClick={()=>announce(`${r.name} details opened`)}>...</button>}</td></tr>)}</tbody></table>{!shown.length&&<p className="empty">No records match your search and filters.</p>}</div></article></>;
 }
@@ -573,29 +495,24 @@ function RecordsPage({module,query,filter,setFilter,announce,onNewContact,onEdit
 function CustomerContactList({onNew,announce,onOpenCustomer}:{onNew:()=>void,announce:(x:string)=>void,onOpenCustomer:(customer:Row)=>void}) {
   const [customerFilter,setCustomerFilter]=useState("All clients");
   const [customerSearch,setCustomerSearch]=useState("");
-  const contacts=[
-    ["Olivia Martin","Acme Industries","General Manager","olivia@acme.example","+966 55 204 1180","Primary"],
-    ["James Wilson","Northstar Labs","Project Director","james@northstar.example","+966 54 822 4012","Primary"],
-    ["Emma Thompson","Mira Systems","Procurement Lead","emma@mira.example","+966 50 314 8870","Commercial"],
-    ["Noah Anderson","Vertex Group","Technical Manager","noah@vertex.example","+966 56 702 1994","Technical"],
-  ];
+  const contacts:string[][]=[];
   const customerNames=["All clients",...Array.from(new Set(contacts.map(contact=>contact[1])))];
   const visibleContacts=contacts.filter(contact=>(customerFilter==="All clients"||contact[1]===customerFilter)&&contact.join(" ").toLowerCase().includes(customerSearch.toLowerCase()));
   return <article className="panel customer-contact-list"><div className="panel-head"><div><h2>Client contacts</h2><p>{visibleContacts.length} contact{visibleContacts.length===1?"":"s"} linked to {customerFilter==="All clients"?"all client accounts":customerFilter}</p></div><div className="contact-head-actions"><label>Search<input value={customerSearch} onChange={e=>setCustomerSearch(e.target.value)} placeholder="Client or contact..."/></label><label>Client<select value={customerFilter} onChange={e=>setCustomerFilter(e.target.value)}>{customerNames.map(name=><option key={name}>{name}</option>)}</select></label><button className="primary compact" onClick={onNew}><span>+</span>New contact</button></div></div><div className="table-scroll"><table><thead><tr><th>Contact</th><th>Client</th><th>Job title</th><th>Email</th><th>Mobile phone</th><th>Role</th><th></th></tr></thead><tbody>{visibleContacts.map(c=><tr key={c[0]} className="record-row" onClick={()=>announce(`${c[0]} contact opened`)}><td><strong>{c[0]}</strong></td><td><button className="customer-link" onClick={e=>{e.stopPropagation();const customer=records.Customers.find(item=>item.name===c[1]);if(customer)onOpenCustomer(customer);}}>{c[1]}</button></td><td>{c[2]}</td><td><a href={`mailto:${c[3]}`} onClick={e=>e.stopPropagation()}>{c[3]}</a></td><td>{c[4]}</td><td><span className="status-pill neutral">{c[5]}</span></td><td><button className="more">...</button></td></tr>)}</tbody></table>{visibleContacts.length===0&&<p className="empty">No contacts match this client search.</p>}</div></article>;
 }
 
 function Reports({announce}:{announce:(x:string)=>void}) { const [range,setRange]=useState("This quarter"); const [selectedReport,setSelectedReport]=useState("Sales performance"); return <><div className="report-controls"><label>Reporting period<select value={range} onChange={e=>setRange(e.target.value)}><option>This month</option><option>This quarter</option><option>This year</option></select></label><button className="secondary" onClick={()=>announce(`Reports refreshed for ${range}`)}>Refresh data</button></div>
-  <div className="metrics"><Metric label="Revenue" value="$1.28M" detail="Up 14.2% vs prior period"/><Metric label="Win rate" value="38.6%" detail="Up 3.8 percentage points"/><Metric label="Average deal" value="$42.8k" detail="Up 6.1% vs prior period"/><Metric label="Sales cycle" value="41 days" detail="4 days faster"/></div>
-  <div className="reports-grid"><article className="panel"><div className="panel-head"><div><h2>Pipeline by stage</h2><p>Opportunity value and conversion</p></div></div><div className="funnel"><div><span>Qualification</span><b>$820k</b><i style={{width:"100%"}}/></div><div><span>Discovery</span><b>$615k</b><i style={{width:"76%"}}/></div><div><span>Proposal</span><b>$408k</b><i style={{width:"51%"}}/></div><div><span>Negotiation</span><b>$264k</b><i style={{width:"34%"}}/></div></div></article>
-    <article className="panel"><div className="panel-head"><div><h2>Revenue by owner</h2><p>Closed-won performance</p></div></div><div className="leaderboard"><div><span>SC</span><p><strong>Sarah Chen</strong><small>$486,200</small></p><b>38%</b></div><div><span>DK</span><p><strong>David Kim</strong><small>$372,800</small></p><b>29%</b></div><div><span>AM</span><p><strong>Alex Morgan</strong><small>$281,400</small></p><b>22%</b></div><div><span>LN</span><p><strong>Leah Nguyen</strong><small>$139,600</small></p><b>11%</b></div></div></article></div>
+  <div className="metrics"><Metric label="Revenue" value="$0" detail="No sales recorded"/><Metric label="Win rate" value="0%" detail="No opportunities recorded"/><Metric label="Average deal" value="$0" detail="No deals recorded"/><Metric label="Sales cycle" value="0 days" detail="No completed sales"/></div>
+  <div className="reports-grid"><article className="panel"><div className="panel-head"><div><h2>Pipeline by stage</h2><p>Opportunity value and conversion</p></div></div><p className="empty">No opportunity data yet.</p></article>
+    <article className="panel"><div className="panel-head"><div><h2>Revenue by owner</h2><p>Closed-won performance</p></div></div><p className="empty">No revenue data yet.</p></article></div>
   <article className="panel report-library"><div className="panel-head"><div><h2>Report library</h2><p>Ready-to-use operational reports</p></div></div><div className="report-cards">{["Sales performance","Client health","Project delivery","Opportunity conversion"].map((x,i)=><button key={x} className={selectedReport===x?"selected":""} onClick={()=>setSelectedReport(x)}><span>R{i+1}</span><div><strong>{x}</strong><small>Updated today</small></div><b>-&gt;</b></button>)}</div></article><ReportDetail name={selectedReport} range={range}/></> }
 
 function ReportDetail({name,range}:{name:string,range:string}) {
   const rows:Record<string,string[][]>={
-    "Sales performance":[["Sarah Chen","$486,200","14 won","38%"],["David Kim","$372,800","11 won","29%"],["Alex Morgan","$281,400","8 won","22%"]],
-    "Client health":[["Acme Industries","Active","92%","Low"],["Northstar Labs","Active","88%","Low"],["Mira Systems","At risk","61%","High"]],
-    "Project delivery":[["Q3 platform rollout","72%","On schedule","Sep 12, 2026"],["Data consolidation","45%","On schedule","Oct 2, 2026"],["Customer portal","91%","Review","Aug 16, 2026"]],
-    "Opportunity conversion":[["Bidding","42","$820k","100%"],["Proposal","24","$408k","57%"],["Negotiation","13","$264k","31%"],["Ready for delivery","8","$184k","19%"]],
+    "Sales performance":[],
+    "Client health":[],
+    "Project delivery":[],
+    "Opportunity conversion":[],
   };
   const headings=name==="Sales performance"?["Owner","Revenue","Deals","Win rate"]:name==="Client health"?["Client","Status","Health score","Risk"]:name==="Project delivery"?["Project","Progress","Delivery status","Due date"]:["Stage","Records","Value","Conversion"];
   const printReport=()=>{const report=document.querySelector(".report-detail");if(!report)return;const printWindow=window.open("","_blank","width=960,height=720");if(!printWindow){window.print();return}printWindow.document.write(`<!doctype html><html><head><title>${name} - ${range}</title><style>body{font-family:Arial,sans-serif;margin:36px;color:#161616}article{border-top:4px solid #161616}.panel-head{display:flex;justify-content:space-between;align-items:end;padding:18px 0;border-bottom:1px solid #c6c6c6}.panel-head h2{margin:0 0 6px;font-size:24px}.panel-head p{margin:0;color:#525252}.panel-head button{display:none}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{padding:12px;border-bottom:1px solid #d6d6d6;text-align:left;font-size:12px}th{background:#f4f4f4}@media print{body{margin:0}}</style></head><body>${report.outerHTML}</body></html>`);printWindow.document.close();printWindow.focus();setTimeout(()=>printWindow.print(),150)};

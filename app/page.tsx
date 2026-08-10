@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
+import { deleteSupabaseRow, insertSupabaseRow, readSupabaseTable, supabase, upsertSupabaseRow } from "./supabase";
+import PermissionsPage from "./permissions-page";
 
 type Row = { id: string; name: string; account: string; owner: string; value: string; status: string; date: string; phone?:string; email?:string; region?:string; location?:string };
 type WonProject = { id: string; customerId:string; name: string; type: string; status: string; progress: string; start: string; due: string };
@@ -35,6 +37,7 @@ const pageCopy: Record<string, [string, string]> = {
   Employees:["Employees", "Manage internal users, roles, contact details, and assignments."],
   Directory:["Business directory", "Browse regions, branches, end users, categories, and lookup data."],
   Reports:["Reports", "Explore performance across sales and delivery."],
+  "Team & access":["User permissions", "Control what each user can view and modify."],
 };
 
 function selectValues(field: string, module = "") {
@@ -93,7 +96,17 @@ function VoiceTextarea({defaultValue="",onValueChange}:{defaultValue?:string,onV
   return <div className="voice-field"><textarea value={value} onChange={e=>{setValue(e.target.value);onValueChange?.(e.target.value)}} placeholder="Type or use the microphone..."/><button type="button" className={listening?"listening":""} onClick={toggleVoice} aria-label={listening?"Stop voice typing":"Start voice typing"}><span>MIC</span>{listening?" Stop listening":" Dictate"}</button>{message&&<small>{message}</small>}</div>;
 }
 
+function toIsoDate(value:string){if(!value)return null;const date=new Date(value);return Number.isNaN(date.getTime())?null:date.toISOString().slice(0,10)}
+function parseMoney(value:string){const number=Number(value.replace(/[^0-9.-]/g,""));return Number.isFinite(number)?number:null}
+
+function LoginScreen({onError}:{onError:(message:string)=>void}){
+  const [email,setEmail]=useState("administrator@tps-crm.local");const [password,setPassword]=useState("");const [busy,setBusy]=useState(false);
+  async function login(event:FormEvent){event.preventDefault();if(!supabase)return;setBusy(true);onError("");const {error}=await supabase.auth.signInWithPassword({email,password});setBusy(false);if(error)onError(error.message)}
+  return <main className="login-screen"><form onSubmit={login}><img src="/tps-logo.png" alt="Technology Products and Services Co."/><p>TPS CRM</p><h1>Administrator sign in</h1><label>Email<input type="email" value={email} onChange={event=>setEmail(event.target.value)} required autoComplete="username"/></label><label>Password<input type="password" value={password} onChange={event=>setPassword(event.target.value)} required autoComplete="current-password"/></label><button disabled={busy}>{busy?"Signing in...":"Sign in"}</button></form></main>
+}
+
 export default function Home() {
+  const [sessionReady,setSessionReady]=useState(false);const [signedIn,setSignedIn]=useState(false);const [authError,setAuthError]=useState("");
   const [active, setActive] = useState("Overview");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("All statuses");
@@ -114,6 +127,7 @@ export default function Home() {
   const [employeeRows, setEmployeeRows] = useState<Row[]>(records.Employees);
   const [contactListRows, setContactListRows] = useState<Row[]>(records.Contacts);
   const [customerRows, setCustomerRows] = useState<Row[]>(records.Customers);
+  const [supplierRows, setSupplierRows] = useState<Row[]>(records.Suppliers);
   const [taskRows, setTaskRows] = useState<Row[]>(records.Tasks);
   const [projectRows,setProjectRows]=useState<Row[]>(records.Projects);
   useEffect(()=>{try{const saved=window.localStorage.getItem("tps-user-project-rows");if(saved)setProjectRows(JSON.parse(saved))}catch{}},[]);
@@ -141,20 +155,36 @@ export default function Home() {
     setActive("Customers");setEditingCustomer(client);setCustomerPage("Contacts");setContactRows([Number(client.id.replace(/\D/g,""))]);setDrawer(true);
   },[opportunityContactName,opportunityClientName,customerRows]);
   useEffect(()=>{setOpportunityComment("");setProjectWon(false);setProjectStatus("New");setProjectProgress(15)},[editingCustomer?.id]);
-  function addOpportunityComment(){const comment=opportunityComment.trim();if(!comment){announce("Enter a comment first");return;}if(!editingCustomer?.id){announce("Save the opportunity before adding comments to History");return;}const entry=`${new Date().toLocaleString()} — ${comment}`;setOpportunityHistory(history=>({...history,[editingCustomer.id]:[...(history[editingCustomer.id]||[]),entry]}));setOpportunityComment("");announce("Comment added to History with date and time");}
+  async function findOpportunityId(code:string){if(!supabase)return null;const {data,error}=await supabase.from("opportunities").select("id").eq("opportunity_code",code).maybeSingle();if(error)throw error;return data?.id||null}
+  async function addOpportunityComment(){const comment=opportunityComment.trim();if(!comment){announce("Enter a comment first");return;}if(!editingCustomer?.id){announce("Save the opportunity before adding comments to History");return;}try{const opportunityId=await findOpportunityId(editingCustomer.id);if(!opportunityId)throw new Error("Save the opportunity first");const saved:any=await insertSupabaseRow("opportunity_history",{opportunity_id:opportunityId,note:comment});const entry=`${new Date(saved.created_at).toLocaleString()} — ${comment}`;setOpportunityHistory(history=>({...history,[editingCustomer.id]:[...(history[editingCustomer.id]||[]),entry]}));setOpportunityComment("");announce("Comment saved to History with date and time")}catch(error:any){announce(`History save failed: ${error.message}`)}}
   const [customerOpportunityRows,setCustomerOpportunityRows]=useState<CustomerOpportunity[]>([]);
   const [quotationRows, setQuotationRows] = useState<Row[]>(records.Quotations);
+  useEffect(()=>{if(!supabase){setSessionReady(true);return}supabase.auth.getSession().then(({data})=>{setSignedIn(Boolean(data.session));setSessionReady(true)});const {data}=supabase.auth.onAuthStateChange((_event,session)=>{setSignedIn(Boolean(session));setSessionReady(true)});return()=>data.subscription.unsubscribe()},[]);
+  useEffect(()=>{if(!signedIn)return;Promise.all([readSupabaseTable<any>("clients"),readSupabaseTable<any>("contacts"),readSupabaseTable<any>("suppliers"),readSupabaseTable<any>("opportunities"),readSupabaseTable<any>("projects")]).then(([clients,contacts,suppliers,opportunities,projects])=>{const clientName=new Map(clients.map((item:any)=>[item.id,item.name]));setCustomerRows(clients.map((item:any)=>({id:item.client_code,name:item.name,account:item.phone||"No primary contact",owner:item.owner_name||"Unassigned",value:"$0",status:item.status||"Active",date:new Date(item.updated_at||item.created_at).toLocaleDateString(),phone:item.phone||"",email:item.email||"",region:item.region||"",location:item.location||""})));setContactListRows(contacts.map((item:any)=>({id:item.contact_code,name:item.full_name,account:clientName.get(item.client_id)||"Unassigned client",owner:item.department||"",value:item.job_title||"",status:item.role||"Active",date:new Date(item.updated_at||item.created_at).toLocaleDateString(),phone:item.mobile_phone||"",email:item.email||"",region:item.region||"",location:item.location||""})));setSupplierRows(suppliers.map((item:any)=>({id:item.supplier_code,name:item.name,account:"Supplier",owner:item.region||"",value:item.scope||"",status:item.status||"Active",date:new Date(item.updated_at||item.created_at).toLocaleDateString(),phone:item.phone||"",email:item.email||"",region:item.region||""})));setOpportunityRows(opportunities.map((item:any)=>({id:item.opportunity_code,name:item.project_name,account:clientName.get(item.client_id)||"Unassigned client",owner:item.owner_name||"Unassigned",value:item.value==null?"To be valued":`${item.currency||"SAR"} ${item.value}`,status:item.inquiry_status||item.status||"Inquiry",date:item.close_date||item.next_call_date||""})));setProjectRows(projects.map((item:any)=>({id:item.project_code,name:item.name,account:clientName.get(item.client_id)||"Unassigned client",owner:item.owner_name||"Unassigned",value:`${item.progress||0}%`,status:item.status||"New",date:item.estimated_end_date||""}))) }).catch((error:any)=>announce(`Database read failed: ${error.message}`))},[signedIn]);
+  async function findClientId(name:string){if(!supabase||!name||name==="Unassigned client")return null;const {data,error}=await supabase.from("clients").select("id").eq("name",name).maybeSingle();if(error)throw error;return data?.id||null}
   function navigate(label: string) { setActive(label); setQuery(""); setFilter("All statuses"); setDrawer(false); }
   function announce(message: string) { setNotice(message); window.setTimeout(() => setNotice(""), 2200); }
-  function saveDrawer(e: any) {
+  async function saveDrawer(e: any) {
     e.preventDefault();
+    const form=e.currentTarget as HTMLFormElement;
+    const control=(label:string)=>{const fieldLabel=Array.from(form.querySelectorAll("label")).find(item=>item.childNodes[0]?.textContent?.trim()===label);return (fieldLabel?.querySelector("input,select,textarea") as HTMLInputElement | null)?.value.trim()||"";};
+    if(active==="Contacts"||(active==="Customers"&&customerPage==="Contacts")){
+      const first=control("First Name"),last=control("Last Name"),fullName=`${first} ${last}`.trim();
+      if(!fullName){announce("Contact name is required");return}
+      const clientName=active==="Customers"?editingCustomer?.name||"":control("Company");
+      try{const contact:Row={id:active==="Contacts"&&editingCustomer?.id?editingCustomer.id:`CON-${Date.now().toString().slice(-6)}`,name:fullName,account:clientName,owner:control("Department"),value:control("Job Title"),status:control("Role")||"Primary",date:new Date().toLocaleDateString(),phone:control("Mobile Phone")||control("Business Phone"),email:control("E-mail Address"),region:control("Country / Region"),location:control("Location")};await upsertSupabaseRow("contacts",{contact_code:contact.id,client_id:await findClientId(clientName),full_name:contact.name,job_title:contact.value||null,department:contact.owner||null,mobile_phone:contact.phone||null,email:contact.email||null,region:contact.region||null,location:contact.location||null,role:contact.status},"contact_code");setContactListRows(rows=>rows.some(row=>row.id===contact.id)?rows.map(row=>row.id===contact.id?contact:row):[contact,...rows]);setDrawer(false);setEditingCustomer(null);announce("Contact saved to the database")}catch(error:any){announce(`Save failed: ${error.message}`)}return
+    }
+    if(active==="Suppliers"){
+      const name=control("Supplier Name");if(!name){announce("Supplier Name is required");return}
+      const supplier:Row={id:control("Supplier ID")||editingCustomer?.id||`SUP-${Date.now().toString().slice(-6)}`,name,account:"Supplier",owner:control("Country / Region")||control("Region"),value:control("Supplier Scope")||control("Scope of Supply / What they sell"),status:control("Status")||"Active",date:new Date().toLocaleDateString(),phone:control("Phone")||control("Mobile Phone"),email:control("Email"),region:control("Country / Region")||control("Region")};
+      try{await upsertSupabaseRow("suppliers",{supplier_code:supplier.id,name:supplier.name,account_number:control("Account Number")||null,scope:supplier.value||null,phone:supplier.phone||null,email:supplier.email||null,region:supplier.region||null,status:supplier.status},"supplier_code");setSupplierRows(rows=>rows.some(row=>row.id===supplier.id)?rows.map(row=>row.id===supplier.id?supplier:row):[supplier,...rows]);setDrawer(false);setEditingCustomer(null);announce("Supplier saved to the database")}catch(error:any){announce(`Save failed: ${error.message}`)}return
+    }
     if (active === "Customers") {
       if(customerPage!=="General"){setDrawer(false);announce("Client changes saved");return;}
-      const form=e.currentTarget as HTMLFormElement;
-      const control=(label:string)=>{const fieldLabel=Array.from(form.querySelectorAll("label")).find(item=>item.childNodes[0]?.textContent?.trim()===label);return (fieldLabel?.querySelector("input,select,textarea") as HTMLInputElement | null)?.value.trim()||"";};
       const customerName=control("Client Name");
       if(!customerName){announce("Client Name is required");return;}
       const customer:Row={id:control("AccountID")||`CUS-${String(1049+customerRows.length).padStart(4,"0")}`,name:customerName,account:control("Phone")||"No primary contact",owner:control("Handled by")||"Alex Morgan",value:editingCustomer?.value||"$0",status:control("Call Status")||"Active",date:new Date().toLocaleDateString()};
+      try{await upsertSupabaseRow("clients",{client_code:customer.id,name:customer.name,name_ar:control("Client Name - Arabic")||null,client_type:control("Client Type")||null,phone:customer.account==="No primary contact"?null:customer.account,email:control("Email")||null,region:control("Country / Region")||null,location:control("City")||null,owner_name:customer.owner,status:customer.status},"client_code")}catch(error:any){announce(`Save failed: ${error.message}`);return}
       setCustomerRows(rows=>editingCustomer?rows.map(row=>row.id===editingCustomer.id?customer:row):[customer,...rows]);
       setDrawer(false);setEditingCustomer(null);announce(editingCustomer?"Client information saved":"New client added to the client list");return;
     }
@@ -185,6 +215,7 @@ export default function Home() {
       const control=(label:string)=>{const fieldLabel=Array.from(form.querySelectorAll("label")).find(item=>item.childNodes[0]?.textContent?.trim()===label);return (fieldLabel?.querySelector("input,select,textarea") as HTMLInputElement|null)?.value.trim()||""};
       const progress=(form.querySelector(".project-progress-input") as HTMLInputElement|null)?.value||editingCustomer?.value||"0%";
       const project:Row={id:control("Project ID")||editingCustomer?.id||`PRJ-${String(120+projectRows.length).padStart(3,"0")}`,name:control("Project Name")||editingCustomer?.name||"New project",account:editingCustomer?.account||"Unassigned client",owner:editingCustomer?.owner||"Unassigned",value:progress.includes("%")?progress:`${progress}%`,status:control("Status")||editingCustomer?.status||"New",date:control("Estimated End Date")||editingCustomer?.date||new Date().toLocaleDateString()};
+      try{await upsertSupabaseRow("projects",{project_code:project.id,name:project.name,client_id:await findClientId(project.account),project_type:control("Project Type")||null,owner_name:project.owner,progress:Number(project.value.replace("%",""))||0,status:project.status,currency:control("Currency")||"SAR",value:parseMoney(control("Actual Revenue")),start_date:toIsoDate(control("Start Date")),estimated_end_date:toIsoDate(project.date),notes:control("Notes")||null},"project_code")}catch(error:any){announce(`Save failed: ${error.message}`);return}
       const nextRows=editingCustomer?projectRows.map(row=>row.id===editingCustomer.id?project:row):[project,...projectRows];
       setProjectRows(nextRows);window.localStorage.setItem("tps-user-project-rows",JSON.stringify(nextRows));setDrawer(false);setEditingCustomer(null);announce("Project changes saved and list updated");return;
     }
@@ -195,6 +226,7 @@ export default function Home() {
       if(!recordName){announce("Project Name is required");return;}
       const targetRows=active==="Quotations"?quotationRows:opportunityRows;
       const commercial:Row={id:editingCustomer?.id||`${active==="Quotations"?"QUO":"OPP"}-${String(286+targetRows.length).padStart(3,"0")}`,name:recordName,account:control("Client")||control("End User")||"Unassigned client",owner:control("Employee")||"Alex Morgan",value:control("TPS Offer")||control("Supplier Total")||control("Offer Value")||"To be valued",status:control("Client Inquiry Status")||control("Project Status")||"Bidding",date:control("Offer Date")||new Date().toLocaleDateString()};
+      try{await upsertSupabaseRow("opportunities",{opportunity_code:commercial.id,project_name:commercial.name,client_id:await findClientId(commercial.account),owner_name:commercial.owner,inquiry_status:commercial.status,status:"Active",document_type:control("Document Type")||"Inquiry",opportunity_type:control("Opportunity Type")||null,value:parseMoney(commercial.value),currency:control("Currency")||"SAR",last_call_date:toIsoDate(control("Last Call Date")),next_call_date:toIsoDate(control("Next Call Date")),scope_of_work:control("Scope Note")||control("Scope of Work")||null,notes:control("Notes")||null,close_date:toIsoDate(commercial.date)},"opportunity_code")}catch(error:any){announce(`Save failed: ${error.message}`);return}
       const comment=opportunityComment.trim()||control("Comments");
       if(comment){const entry=`${new Date().toLocaleString()} — ${comment}`;setOpportunityHistory(history=>({...history,[commercial.id]:[...(history[commercial.id]||[]),entry]}));}
       const update=(rows:Row[])=>editingCustomer?rows.map(row=>row.id===editingCustomer.id?commercial:row):[commercial,...rows];
@@ -285,29 +317,32 @@ export default function Home() {
     return()=>{form.removeEventListener("change",handleFormChange);endUserSelect?.removeEventListener("change",handleEndUserChange);projectStatusSelect?.removeEventListener("change",handleProjectStatusChange);supplierSelect?.removeEventListener("change",handleSupplierChange);equipmentSelect?.removeEventListener("change",handleEquipmentChange);currencySelects.forEach(select=>select.removeEventListener("change",handleCurrencyChange));materialSelect?.removeEventListener("change",handleMaterialChange);contactSelect?.remove();endUserSelect?.remove();supplierSelect?.remove();equipmentSelect?.remove();materialSelect?.remove();if(contactInput)contactInput.hidden=false;if(endUserInput)endUserInput.hidden=false;if(supplierInput)supplierInput.hidden=false;if(equipmentInput)equipmentInput.hidden=false;if(materialInput)materialInput.hidden=false};
   },[drawer,active,customerRows,projectTypeValues]);
 
+  if(!sessionReady)return <main className="login-screen"><p>Connecting securely...</p></main>;
+  if(!signedIn)return <><LoginScreen onError={setAuthError}/>{authError&&<div className="auth-error" role="alert">{authError}</div>}</>;
   return <main className="app-shell">
     <header className="topbar">
       <button className="product-switcher" aria-label="Open product switcher" onClick={()=>announce("Product switcher opened")}>+</button>
       <button className="brand" onClick={() => navigate("Overview")}><strong>TPS</strong><span>ClientCore</span></button>
       <div className="top-spacer" />
       <label className="search"><span aria-hidden="true">S</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Search ${active.toLowerCase()}...`} aria-label={`Search ${active}`} /></label>
-      <button className="icon-btn" aria-label="Help" onClick={()=>announce("Help center opened")}>?</button><button className="icon-btn notification" aria-label="Notifications" onClick={()=>announce("No new notifications")}>N<i /></button>
+      <button className="icon-btn" aria-label="Help" onClick={()=>announce("Help center opened")}>?</button><button className="icon-btn notification" aria-label="Notifications" onClick={()=>announce("No new notifications")}>N<i /></button><button className="sign-out" onClick={()=>supabase?.auth.signOut()}>Sign out</button>
     </header>
 
     <aside className="sidebar"><nav aria-label="Primary navigation"><p className="eyebrow">Workspace</p>
       {navigation.map(item => <button key={item.label} className={active===item.label?"active":""} onClick={() => navigate(item.label)}><span className={`nav-icon ${item.color}`}>{item.icon}</span>{item.label==="Customers"?"Clients":item.label==="Directory"?"Settings":item.label}</button>)}
-      <p className="eyebrow lower">Manage</p><button className={active==="Employees"?"active":""} onClick={() => navigate("Employees")}><span>TM</span>Team & access</button>
+      <p className="eyebrow lower">Manage</p><button className={active==="Team & access"?"active":""} onClick={() => navigate("Team & access")}><span>TM</span>Team & access</button>
     </nav><div className="org-card"><span className="org-mark">T</span><div><strong>TPS</strong><small>CRM workspace</small></div><span>^</span></div></aside>
 
     <section className="workspace">
       <div className="page-heading"><div><p className="breadcrumb">ClientCore / {active==="Customers"?"Clients":active}</p><h1>{active==="Overview"?"Welcome to TPS CRM":pageCopy[active]?.[0]}</h1><p>{active==="Overview"?"Add your records to begin tracking your business.":pageCopy[active]?.[1]}</p></div>
-        <div className="page-heading-actions"><img src="/tps-logo.png" alt="Technology Products and Services Co." />{!['Reports','Directory'].includes(active) && <button className="primary" onClick={() => { setEditingCustomer(null); if(active==="Opportunities"){setOpportunityClientContext("");setOpportunityContactName("")} setCustomerPage("General"); setOpportunitySection("Inquiry Information"); setContactRows([1]); setDrawer(true); }}><span>+</span>Add {actionName}</button>}{active === "Reports" && <button className="primary" onClick={() => announce("Report exported as CSV")}><span>D</span>Export report</button>}</div>
+        <div className="page-heading-actions"><img src="/tps-logo.png" alt="Technology Products and Services Co." />{!['Reports','Directory','Team & access'].includes(active) && <button className="primary" onClick={() => { setEditingCustomer(null); if(active==="Opportunities"){setOpportunityClientContext("");setOpportunityContactName("")} setCustomerPage("General"); setOpportunitySection("Inquiry Information"); setContactRows([1]); setDrawer(true); }}><span>+</span>Add {actionName}</button>}{active === "Reports" && <button className="primary" onClick={() => announce("Report exported as CSV")}><span>D</span>Export report</button>}</div>
       </div>
 
       {active === "Overview" && <Overview navigate={navigate} announce={announce} opportunities={[...opportunityRows,...quotationRows]} clients={customerRows} tasks={taskRows} />}
-      {["Customers","Contacts","Opportunities","Projects","Suppliers","Activities","Tasks","Employees"].includes(active) && <RecordsPage module={active} rowsOverride={active==="Customers"?customerRows:active==="Contacts"?contactListRows:active==="Employees"?employeeRows:active==="Tasks"?taskRows:active==="Projects"?projectRows:active==="Opportunities"?[...opportunityRows,...quotationRows]:undefined} query={query} filter={filter} setFilter={setFilter} announce={announce} onNewContact={() => { setEditingCustomer(null); setCustomerPage("Contacts"); setContactRows([1]); setDrawer(true); }} onDeleteCommercial={record=>{if(window.confirm(`Delete ${record.name} from the commercial list?`)){record.id.startsWith("QUO-")?setQuotationRows(rows=>rows.filter(row=>row.id!==record.id)):setOpportunityRows(rows=>rows.filter(row=>row.id!==record.id));announce(`${record.name} deleted`)}}} onDeleteContact={contact=>{if(window.confirm(`Delete ${contact.name} from the contact list?`)){setContactListRows(rows=>rows.filter(row=>row.id!==contact.id));announce(`${contact.name} deleted`)}}} onDeleteCustomer={customer=>{if(window.confirm(`Delete ${customer.name} from the client list?`)){setCustomerRows(rows=>rows.filter(row=>row.id!==customer.id));announce(`${customer.name} deleted`)}}} onDeleteEmployee={employee=>{if(window.confirm(`Delete ${employee.name} from the employee list?`)){setEmployeeRows(rows=>rows.filter(row=>row.id!==employee.id));announce(`${employee.name} deleted`)}}} onEditCustomer={customer => { setEditingCustomer(customer); if(active==="Opportunities"){setOpportunityClientContext(customer.account);setOpportunityContactName("")} setCustomerPage("General"); setOpportunitySection("Inquiry Information"); setContactRows([1]); setDrawer(true); }} />}
+      {["Customers","Contacts","Opportunities","Projects","Suppliers","Activities","Tasks","Employees"].includes(active) && <RecordsPage module={active} rowsOverride={active==="Customers"?customerRows:active==="Contacts"?contactListRows:active==="Suppliers"?supplierRows:active==="Employees"?employeeRows:active==="Tasks"?taskRows:active==="Projects"?projectRows:active==="Opportunities"?[...opportunityRows,...quotationRows]:undefined} sourceCountOverride={active==="Customers"?customerRows.length:active==="Contacts"?contactListRows.length:active==="Suppliers"?supplierRows.length:active==="Projects"?projectRows.length:active==="Opportunities"?opportunityRows.length:undefined} query={query} filter={filter} setFilter={setFilter} announce={announce} onNewContact={() => { setEditingCustomer(null); setCustomerPage("Contacts"); setContactRows([1]); setDrawer(true); }} onDeleteCommercial={async record=>{if(window.confirm(`Delete ${record.name} from the commercial list?`)){try{await deleteSupabaseRow("opportunities","opportunity_code",record.id);record.id.startsWith("QUO-")?setQuotationRows(rows=>rows.filter(row=>row.id!==record.id)):setOpportunityRows(rows=>rows.filter(row=>row.id!==record.id));announce(`${record.name} deleted`)}catch(error:any){announce(`Delete failed: ${error.message}`)}}}} onDeleteContact={async contact=>{if(window.confirm(`Delete ${contact.name} from the contact list?`)){try{await deleteSupabaseRow("contacts","contact_code",contact.id);setContactListRows(rows=>rows.filter(row=>row.id!==contact.id));announce(`${contact.name} deleted`)}catch(error:any){announce(`Delete failed: ${error.message}`)}}}} onDeleteCustomer={async customer=>{if(window.confirm(`Delete ${customer.name} from the client list?`)){try{await deleteSupabaseRow("clients","client_code",customer.id);setCustomerRows(rows=>rows.filter(row=>row.id!==customer.id));announce(`${customer.name} deleted`)}catch(error:any){announce(`Delete failed: ${error.message}`)}}}} onDeleteEmployee={employee=>{if(window.confirm(`Delete ${employee.name} from the employee list?`)){setEmployeeRows(rows=>rows.filter(row=>row.id!==employee.id));announce(`${employee.name} deleted`)}}} onEditCustomer={customer => { setEditingCustomer(customer); if(active==="Opportunities"){setOpportunityClientContext(customer.account);setOpportunityContactName("")} setCustomerPage("General"); setOpportunitySection("Inquiry Information"); setContactRows([1]); setDrawer(true); }} />}
       {active === "Directory" && <Directory announce={announce} targetGroup={directoryTarget} equipmentValues={equipmentValues} onEquipmentChange={setEquipmentValues} projectTypeValues={projectTypeValues} onProjectTypeChange={setProjectTypeValues} />}
       {active === "Reports" && <Reports announce={announce} />}
+      {active === "Team & access" && <PermissionsPage announce={announce} />}
     </section>
 
     {drawer && <div className={`drawer-backdrop ${editingCustomer&&active==="Customers"?"customer-fullpage":""}`} onMouseDown={() => setDrawer(false)}>

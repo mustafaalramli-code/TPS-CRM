@@ -9,6 +9,7 @@ type WonProject = { id: string; customerId:string; name: string; type: string; s
 type CustomerOpportunity = { customerId:string; id:string; name:string; type:string; documentType?:string; value:string; stage:string; owner:string; close:string };
 const supplierNames: string[] = [];
 const clientContactDetails: {client:string;name:string;phone:string;email:string;region:string;location:string}[] = [];
+const TPS_COMPANY_NAME = "Technology Products and Services (TPS)";
 
 const navigation = [
   { icon:"OV", label:"Overview", color:"blue" }, { icon:"CU", label:"Customers", color:"purple" },
@@ -58,11 +59,12 @@ function customerFieldValue(field: string, customer: Row | null, module = "") {
   const isEmployeeField = field.includes("Handled") || field.includes("Assigned To") || field === "Employee" || field.includes("Responsible");
   if (isEmployeeField) return customer?.owner || "";
   if (field === "Account Type" || field === "Client Type") return module === "Suppliers" ? "Supplier" : "Client";
-  if (!customer) return "";
   if (module === "Employees") {
+    if (!customer) return field === "Company" ? TPS_COMPANY_NAME : "";
     const employeeValues: Record<string,string> = {"Employee ID":customer.id,"First Name":customer.name.split(" ")[0],"Last Name":customer.name.split(" ").slice(1).join(" "),"Company":customer.account,"Job Title":customer.value,"Department":customer.owner,"E-mail Address":`${customer.name.toLowerCase().replace(/ /g,".")}@tps.example`,"Country / Region":"Saudi Arabia"};
     return employeeValues[field] || "";
   }
+  if (!customer) return "";
   if (module === "Tasks") {
     const taskValues:Record<string,string>={"Project Name":customer.name,"Task Type":"Others","Client":customer.account,"Employee":customer.owner,"Project Status":customer.status,"Next Call":customer.date,"Offer Value":customer.value};
     return taskValues[field] || "";
@@ -193,7 +195,7 @@ export default function Home() {
       const field = (label:string) => (form.querySelector(`input[placeholder="${label}"]`) as HTMLInputElement | null)?.value.trim() || "";
       const firstName=field("First Name"), lastName=field("Last Name");
       if (!firstName || !lastName) { announce("First name and last name are required"); return; }
-      const employee:Row={id:field("Employee ID")||`EMP-${String(employeeRows.length+1).padStart(3,"0")}`,name:`${firstName} ${lastName}`,account:field("Company")||"TPS",owner:"Staff",value:field("Job Title")||"Employee",status:"Active",date:new Date().toLocaleDateString()};
+      const employee:Row={id:field("Employee ID")||`EMP-${String(employeeRows.length+1).padStart(3,"0")}`,name:`${firstName} ${lastName}`,account:field("Company")||TPS_COMPANY_NAME,owner:"Staff",value:field("Job Title")||"Employee",status:"Active",date:new Date().toLocaleDateString()};
       setEmployeeRows(rows=>editingCustomer?rows.map(row=>row.id===editingCustomer.id?employee:row):[...rows,employee]);
       setDrawer(false);setEditingCustomer(null);announce(editingCustomer?"Employee information updated":"New employee added to the employee list");return;
     }

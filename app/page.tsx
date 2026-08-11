@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import { deleteSupabaseRow, insertSupabaseRow, readSupabaseTable, supabase, upsertSupabaseRow } from "./supabase";
 import PermissionsPage from "./permissions-page";
 
@@ -101,7 +101,25 @@ function VoiceTextarea({defaultValue="",onValueChange}:{defaultValue?:string,onV
 function toIsoDate(value:string){if(!value)return null;const date=new Date(value);return Number.isNaN(date.getTime())?null:date.toISOString().slice(0,10)}
 function parseMoney(value:string){const number=Number(value.replace(/[^0-9.-]/g,""));return Number.isFinite(number)?number:null}
 
+function LoginScreen({onError}:{onError:(message:string)=>void}){
+  const [email,setEmail]=useState("mustafa.alramly@live.com");
+  const [password,setPassword]=useState("");
+  const [busy,setBusy]=useState(false);
+  async function login(event:FormEvent){
+    event.preventDefault();
+    if(!supabase)return;
+    setBusy(true);onError("");
+    const {error}=await supabase.auth.signInWithPassword({email,password});
+    setBusy(false);
+    if(error)onError(error.message);
+  }
+  return <main className="login-screen"><form onSubmit={login}><img src="/tps-logo.png" alt="Technology Products and Services Co."/><p>TPS CRM</p><h1>Administrator sign in</h1><label>Email<input type="email" value={email} onChange={event=>setEmail(event.target.value)} required autoComplete="username"/></label><label>Password<input type="password" value={password} onChange={event=>setPassword(event.target.value)} required autoComplete="current-password"/></label><button disabled={busy}>{busy?"Signing in...":"Sign in"}</button></form></main>;
+}
+
 export default function Home() {
+  const [sessionReady,setSessionReady]=useState(false);
+  const [signedIn,setSignedIn]=useState(false);
+  const [authError,setAuthError]=useState("");
   const [active, setActive] = useState("Overview");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("All statuses");
@@ -154,7 +172,8 @@ export default function Home() {
   async function addOpportunityComment(){const comment=opportunityComment.trim();if(!comment){announce("Enter a comment first");return;}if(!editingCustomer?.id){announce("Save the opportunity before adding comments to History");return;}try{const opportunityId=await findOpportunityId(editingCustomer.id);if(!opportunityId)throw new Error("Save the opportunity first");const saved:any=await insertSupabaseRow("opportunity_history",{opportunity_id:opportunityId,note:comment});const entry=`${new Date(saved.created_at).toLocaleString()} — ${comment}`;setOpportunityHistory(history=>({...history,[editingCustomer.id]:[...(history[editingCustomer.id]||[]),entry]}));setOpportunityComment("");announce("Comment saved to History with date and time")}catch(error:any){announce(`History save failed: ${error.message}`)}}
   const [customerOpportunityRows,setCustomerOpportunityRows]=useState<CustomerOpportunity[]>([]);
   const [quotationRows, setQuotationRows] = useState<Row[]>(records.Quotations);
-  useEffect(()=>{Promise.all([readSupabaseTable<any>("clients"),readSupabaseTable<any>("contacts"),readSupabaseTable<any>("suppliers"),readSupabaseTable<any>("opportunities"),readSupabaseTable<any>("projects"),readSupabaseTable<any>("employees")]).then(([clients,contacts,suppliers,opportunities,projects,employees])=>{const clientName=new Map(clients.map((item:any)=>[item.id,item.name]));setCustomerRows(clients.map((item:any)=>({id:item.client_code,name:item.name,account:item.phone||"No primary contact",owner:item.owner_name||"Unassigned",value:"$0",status:item.status||"Active",date:new Date(item.updated_at||item.created_at).toLocaleDateString(),phone:item.phone||"",email:item.email||"",region:item.region||"",location:item.location||""})));setContactListRows(contacts.map((item:any)=>({id:item.contact_code,name:item.full_name,account:clientName.get(item.client_id)||"Unassigned client",owner:item.department||"",value:item.job_title||"",status:item.role||"Active",date:new Date(item.updated_at||item.created_at).toLocaleDateString(),phone:item.mobile_phone||"",email:item.email||"",region:item.region||"",location:item.location||""})));setSupplierRows(suppliers.map((item:any)=>({id:item.supplier_code,name:item.name,account:"Supplier",owner:item.region||"",value:item.scope||"",status:item.status||"Active",date:new Date(item.updated_at||item.created_at).toLocaleDateString(),phone:item.phone||"",email:item.email||"",region:item.region||""})));setOpportunityRows(opportunities.map((item:any)=>({id:item.opportunity_code,name:item.project_name,account:clientName.get(item.client_id)||"Unassigned client",owner:item.owner_name||"Unassigned",value:item.value==null?"To be valued":`${item.currency||"SAR"} ${item.value}`,status:item.inquiry_status||item.status||"Inquiry",date:item.close_date||item.next_call_date||""})));setProjectRows(projects.map((item:any)=>({id:item.project_code,name:item.name,account:clientName.get(item.client_id)||"Unassigned client",owner:item.owner_name||"Unassigned",value:`${item.progress||0}%`,status:item.status||"New",date:item.estimated_end_date||""})));setEmployeeRows(employees.map((item:any)=>({id:item.employee_code,name:`${item.first_name} ${item.last_name}`.trim(),account:item.company||TPS_COMPANY_NAME,owner:item.department||"Staff",value:item.job_title||"Employee",status:item.status||"Active",date:new Date(item.updated_at||item.created_at).toLocaleDateString(),phone:item.mobile_phone||"",email:item.email||"",region:item.country_region||"",location:item.city||"",details:{businessPhone:item.business_phone||"",homePhone:item.home_phone||"",faxNumber:item.fax_number||"",webPage:item.web_page||"",street:item.street||"",stateProvince:item.state_province||"",postalCode:item.postal_code||""}}))) }).catch((error:any)=>announce(`Database read failed: ${error.message}`))},[]);
+  useEffect(()=>{if(!supabase){setSessionReady(true);return}supabase.auth.getSession().then(({data})=>{setSignedIn(Boolean(data.session));setSessionReady(true)});const {data}=supabase.auth.onAuthStateChange((_event,session)=>{setSignedIn(Boolean(session));setSessionReady(true)});return()=>data.subscription.unsubscribe()},[]);
+  useEffect(()=>{if(!signedIn)return;Promise.all([readSupabaseTable<any>("clients"),readSupabaseTable<any>("contacts"),readSupabaseTable<any>("suppliers"),readSupabaseTable<any>("opportunities"),readSupabaseTable<any>("projects"),readSupabaseTable<any>("employees")]).then(([clients,contacts,suppliers,opportunities,projects,employees])=>{const clientName=new Map(clients.map((item:any)=>[item.id,item.name]));setCustomerRows(clients.map((item:any)=>({id:item.client_code,name:item.name,account:item.phone||"No primary contact",owner:item.owner_name||"Unassigned",value:"$0",status:item.status||"Active",date:new Date(item.updated_at||item.created_at).toLocaleDateString(),phone:item.phone||"",email:item.email||"",region:item.region||"",location:item.location||""})));setContactListRows(contacts.map((item:any)=>({id:item.contact_code,name:item.full_name,account:clientName.get(item.client_id)||"Unassigned client",owner:item.department||"",value:item.job_title||"",status:item.role||"Active",date:new Date(item.updated_at||item.created_at).toLocaleDateString(),phone:item.mobile_phone||"",email:item.email||"",region:item.region||"",location:item.location||""})));setSupplierRows(suppliers.map((item:any)=>({id:item.supplier_code,name:item.name,account:"Supplier",owner:item.region||"",value:item.scope||"",status:item.status||"Active",date:new Date(item.updated_at||item.created_at).toLocaleDateString(),phone:item.phone||"",email:item.email||"",region:item.region||""})));setOpportunityRows(opportunities.map((item:any)=>({id:item.opportunity_code,name:item.project_name,account:clientName.get(item.client_id)||"Unassigned client",owner:item.owner_name||"Unassigned",value:item.value==null?"To be valued":`${item.currency||"SAR"} ${item.value}`,status:item.inquiry_status||item.status||"Inquiry",date:item.close_date||item.next_call_date||""})));setProjectRows(projects.map((item:any)=>({id:item.project_code,name:item.name,account:clientName.get(item.client_id)||"Unassigned client",owner:item.owner_name||"Unassigned",value:`${item.progress||0}%`,status:item.status||"New",date:item.estimated_end_date||""})));setEmployeeRows(employees.map((item:any)=>({id:item.employee_code,name:`${item.first_name} ${item.last_name}`.trim(),account:item.company||TPS_COMPANY_NAME,owner:item.department||"Staff",value:item.job_title||"Employee",status:item.status||"Active",date:new Date(item.updated_at||item.created_at).toLocaleDateString(),phone:item.mobile_phone||"",email:item.email||"",region:item.country_region||"",location:item.city||"",details:{businessPhone:item.business_phone||"",homePhone:item.home_phone||"",faxNumber:item.fax_number||"",webPage:item.web_page||"",street:item.street||"",stateProvince:item.state_province||"",postalCode:item.postal_code||""}}))) }).catch((error:any)=>announce(`Database read failed: ${error.message}`))},[signedIn]);
   async function findClientId(name:string){
     if(!supabase||!name||name==="Unassigned client")return null;
     const clientCode=customerRows.find(client=>client.name===name)?.id;
@@ -318,13 +337,15 @@ export default function Home() {
     return()=>{form.removeEventListener("change",handleFormChange);endUserSelect?.removeEventListener("change",handleEndUserChange);projectStatusSelect?.removeEventListener("change",handleProjectStatusChange);supplierSelect?.removeEventListener("change",handleSupplierChange);equipmentSelect?.removeEventListener("change",handleEquipmentChange);currencySelects.forEach(select=>select.removeEventListener("change",handleCurrencyChange));materialSelect?.removeEventListener("change",handleMaterialChange);contactSelect?.remove();endUserSelect?.remove();supplierSelect?.remove();equipmentSelect?.remove();materialSelect?.remove();if(contactInput)contactInput.hidden=false;if(endUserInput)endUserInput.hidden=false;if(supplierInput)supplierInput.hidden=false;if(equipmentInput)equipmentInput.hidden=false;if(materialInput)materialInput.hidden=false};
   },[drawer,active,customerRows,projectTypeValues]);
 
+  if(!sessionReady)return <main className="login-screen"><p>Connecting securely...</p></main>;
+  if(!signedIn)return <><LoginScreen onError={setAuthError}/>{authError&&<div className="auth-error" role="alert">{authError}</div>}</>;
   return <main className="app-shell">
     <header className="topbar">
       <button className="product-switcher" aria-label="Open product switcher" onClick={()=>announce("Product switcher opened")}>+</button>
       <button className="brand" onClick={() => navigate("Overview")}><strong>TPS</strong><span>ClientCore</span></button>
       <div className="top-spacer" />
       <label className="search"><span aria-hidden="true">S</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Search ${active.toLowerCase()}...`} aria-label={`Search ${active}`} /></label>
-      <button className="icon-btn" aria-label="Help" onClick={()=>announce("Help center opened")}>?</button><button className="icon-btn notification" aria-label="Notifications" onClick={()=>announce("No new notifications")}>N<i /></button>
+      <button className="icon-btn" aria-label="Help" onClick={()=>announce("Help center opened")}>?</button><button className="icon-btn notification" aria-label="Notifications" onClick={()=>announce("No new notifications")}>N<i /></button><button className="sign-out" onClick={()=>supabase?.auth.signOut()}>Sign out</button>
     </header>
 
     <aside className="sidebar"><nav aria-label="Primary navigation"><p className="eyebrow">Workspace</p>

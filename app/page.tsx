@@ -11,6 +11,23 @@ const supplierNames: string[] = [];
 const clientContactDetails: {client:string;name:string;phone:string;email:string;region:string;location:string}[] = [];
 const TPS_COMPANY_NAME = "Technology Products and Services (TPS)";
 
+function clientRowFromDatabase(item:any):Row {
+  return {
+    id:item.client_code,
+    name:item.name,
+    account:item.phone||"No primary contact",
+    owner:item.owner_name||"Unassigned",
+    value:"$0",
+    status:item.status||"Active",
+    date:new Date(item.updated_at||item.created_at).toLocaleDateString(),
+    phone:item.phone||"",
+    email:item.email||"",
+    region:item.region||"",
+    location:item.location||"",
+    details:{nameArabic:item.name_ar||"",clientType:item.client_type||""},
+  };
+}
+
 const navigation = [
   { icon:"OV", label:"Overview", color:"blue" }, { icon:"CU", label:"Customers", color:"purple" },
   { icon:"CO", label:"Contacts", color:"cyan" }, { icon:"OP", label:"Opportunities", color:"green" },
@@ -81,7 +98,7 @@ function customerFieldValue(field: string, customer: Row | null, module = "") {
     const commercialValues:Record<string,string>={"Project Name":customer.name,"Employee":customer.owner,"End User":customer.account,"Offer Value":customer.value,"Project Status":customer.status,"Offer Date":customer.date};
     return commercialValues[field] || "";
   }
-  const values: Record<string,string> = { "AccountID":customer.id, "Account Name":customer.name, "Client Name":customer.name, "Handled by":customer.owner, "Account Type":"Client", "Client Type":"Client", "Category":"Client", "Call Status":customer.status, "Notes":`Account value ${customer.value}` };
+  const values: Record<string,string> = { "AccountID":customer.id, "Account Name":customer.name, "Client Name":customer.name, "Client Name - Arabic":customer.details?.nameArabic||"", "Client Number":customer.id, "Handled by":customer.owner, "Account Type":"Client", "Client Type":customer.details?.clientType||"", "Category":"Client", "Phone":customer.phone||"", "Email":customer.email||"", "Country / Region":customer.region||"", "City":customer.location||"", "Call Status":customer.status, "Notes":`Account value ${customer.value}` };
   return values[field] || "";
 }
 
@@ -204,9 +221,13 @@ export default function Home() {
       if(customerPage!=="General"){setDrawer(false);announce("Client changes saved");return;}
       const customerName=control("Client Name");
       if(!customerName){announce("Client Name is required");return;}
-      const customer:Row={id:control("AccountID")||`CUS-${String(1049+customerRows.length).padStart(4,"0")}`,name:customerName,account:control("Phone")||"No primary contact",owner:control("Handled by")||"Alex Morgan",value:editingCustomer?.value||"$0",status:control("Call Status")||"Active",date:new Date().toLocaleDateString()};
-      try{await upsertSupabaseRow("clients",{client_code:customer.id,name:customer.name,name_ar:control("Client Name - Arabic")||null,client_type:control("Client Type")||null,phone:customer.account==="No primary contact"?null:customer.account,email:control("Email")||null,region:control("Country / Region")||null,location:control("City")||null,owner_name:customer.owner,status:customer.status},"client_code")}catch(error:any){announce(`Save failed: ${error.message}`);return}
-      setCustomerRows(rows=>editingCustomer?rows.map(row=>row.id===editingCustomer.id?customer:row):[customer,...rows]);
+      const clientCode=editingCustomer?.id||control("Client Number")||`CUS-${String(1050+customerRows.length).padStart(4,"0")}`;
+      let customer:Row;
+      try{
+        const saved=await upsertSupabaseRow("clients",{client_code:clientCode,name:customerName,name_ar:control("Client Name - Arabic")||null,client_type:control("Client Type")||null,phone:control("Phone")||null,email:control("Email")||null,region:control("Country / Region")||null,location:control("City")||null,owner_name:control("Handled by")||editingCustomer?.owner||"Unassigned",status:editingCustomer?.status||"Active",updated_at:new Date().toISOString()},"client_code");
+        customer=clientRowFromDatabase(saved);
+      }catch(error:any){announce(`Save failed: ${error.message}`);return}
+      setCustomerRows(rows=>rows.some(row=>row.id===customer.id)?rows.map(row=>row.id===customer.id?customer:row):[customer,...rows]);
       setDrawer(false);setEditingCustomer(null);announce(editingCustomer?"Client information saved":"New client added to the client list");return;
     }
     if (active === "Employees") {

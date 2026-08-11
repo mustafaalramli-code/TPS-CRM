@@ -52,3 +52,14 @@ create table if not exists public.opportunity_history (
   opportunity_id uuid not null references public.opportunities(id) on delete cascade,
   note text not null, created_at timestamptz not null default now()
 );
+
+create table if not exists public.employees (
+  id uuid primary key default gen_random_uuid(), employee_code text unique not null,
+  first_name text not null, last_name text not null,
+  company text not null default 'Technology Products and Services (TPS)',
+  job_title text, department text, email text, business_phone text, home_phone text,
+  mobile_phone text, fax_number text, web_page text, street text, city text,
+  state_province text, postal_code text, country_region text,
+  status text not null default 'Active',
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+);

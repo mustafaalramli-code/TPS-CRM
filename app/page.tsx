@@ -296,13 +296,21 @@ export default function Home() {
       const selectedContact=opportunityContacts.find(contact=>contact.name===opportunityContactName);
       const commercial:Row={id:editingCustomer?.id||`${active==="Quotations"?"QUO":"OPP"}-${String(286+targetRows.length).padStart(3,"0")}`,name:recordName,account:control("Client")||control("End User")||"Unassigned client",owner:control("Employee")||"Alex Morgan",value:control("TPS Offer")||control("Supplier Total")||control("Offer Value")||"To be valued",status:control("Client Inquiry Status")||control("Project Status")||"Bidding",date:control("Offer Date")||new Date().toLocaleDateString(),details:{contactName:opportunityContactName,contactMobile:selectedContact?.phone||"",contactEmail:selectedContact?.email||"",opportunityType:control("Opportunity Type"),documentType:control("Document Type")}};
       const comment=opportunityComment.trim()||control("Comments");
+      let transferredProject:Row|null=null;
       try{
         const savedOpportunity:any=await upsertSupabaseRow("opportunities",{opportunity_code:commercial.id,project_name:commercial.name,client_id:await findClientId(commercial.account),contact_id:await findContactId(opportunityContactName,commercial.account),owner_name:commercial.owner,inquiry_status:commercial.status,status:"Active",document_type:control("Document Type")||"Inquiry",opportunity_type:control("Opportunity Type")||null,value:parseMoney(commercial.value),currency:control("Currency")||"SAR",last_call_date:toIsoDate(control("Last Call Date")),next_call_date:toIsoDate(control("Next Call Date")),scope_of_work:control("Scope Note")||control("Scope of Work")||null,notes:control("Notes")||null,close_date:toIsoDate(commercial.date)},"opportunity_code");
         if(comment){const savedHistory:any=await insertSupabaseRow("opportunity_history",{opportunity_id:savedOpportunity.id,note:comment});const entry=`${new Date(savedHistory.created_at).toLocaleString()} — ${comment}`;setOpportunityHistory(history=>({...history,[commercial.id]:[...(history[commercial.id]||[]),entry]}));}
+        if(projectWon){
+          const projectCode=commercial.id.replace(/^(OPP|QUO)-/,"PRJ-");
+          const clientId=savedOpportunity.client_id||await findClientId(commercial.account);
+          const savedProject:any=await upsertSupabaseRow("projects",{project_code:projectCode,opportunity_id:savedOpportunity.id,client_id:clientId,name:commercial.name,project_type:control("Project Type")||control("Opportunity Type")||null,owner_name:control("Project Owner")||commercial.owner,progress:projectProgress,status:projectStatus,currency:control("Currency")||"SAR",value:parseMoney(commercial.value),start_date:toIsoDate(control("Start Date")),estimated_end_date:toIsoDate(control("Estimated End Date")),notes:control("Notes")||null,updated_at:new Date().toISOString()},"opportunity_id");
+          transferredProject={id:savedProject.project_code||projectCode,name:savedProject.name||commercial.name,account:commercial.account,owner:savedProject.owner_name||commercial.owner,value:`${savedProject.progress??projectProgress}%`,status:savedProject.status||projectStatus,date:savedProject.estimated_end_date||commercial.date};
+        }
       }catch(error:any){announce(`Save failed: ${error.message}`);return}
       const update=(rows:Row[])=>editingCustomer?rows.map(row=>row.id===editingCustomer.id?commercial:row):[commercial,...rows];
       active==="Quotations"?setQuotationRows(update):setOpportunityRows(update);
-      setDrawer(false);setEditingCustomer(null);announce(comment?"Comment added to History with date and time":editingCustomer?"Commercial record updated":"New commercial record added");return;
+      if(transferredProject){setProjectRows(rows=>{const next=rows.some(row=>row.id===transferredProject!.id)?rows.map(row=>row.id===transferredProject!.id?transferredProject!:row):[transferredProject!,...rows];window.localStorage.setItem("tps-user-project-rows",JSON.stringify(next));return next;});}
+      setDrawer(false);setEditingCustomer(null);announce(transferredProject?"Opportunity transferred to the project list":comment?"Comment added to History with date and time":editingCustomer?"Commercial record updated":"New commercial record added");return;
     }
     setDrawer(false);announce(`${editingCustomer?`${actionName} changes`:`New ${actionName}`} saved`);
   }

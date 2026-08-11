@@ -187,6 +187,21 @@ export default function Home() {
   },[opportunityContactName,opportunityClientName,customerRows]);
   useEffect(()=>{setOpportunityComment("");setProjectWon(false);setProjectStatus("New");setProjectProgress(15)},[editingCustomer?.id]);
   async function findOpportunityId(code:string){if(!supabase)return null;const {data,error}=await supabase.from("opportunities").select("id").eq("opportunity_code",code).maybeSingle();if(error)throw error;return data?.id||null}
+  useEffect(()=>{
+    const opportunityCode=editingCustomer?.id;
+    if(!signedIn||!supabase||!opportunityCode||(!opportunityCode.startsWith("OPP-")&&!opportunityCode.startsWith("QUO-")))return;
+    let cancelled=false;
+    (async()=>{
+      try{
+        const opportunityId=await findOpportunityId(opportunityCode);
+        if(!opportunityId){if(!cancelled)setOpportunityHistory(history=>({...history,[opportunityCode]:[]}));return;}
+        const {data,error}=await supabase.from("opportunity_history").select("note,created_at").eq("opportunity_id",opportunityId).order("created_at",{ascending:true});
+        if(error)throw error;
+        if(!cancelled)setOpportunityHistory(history=>({...history,[opportunityCode]:(data||[]).map((item:any)=>`${new Date(item.created_at).toLocaleString()} — ${item.note}`)}));
+      }catch(error:any){if(!cancelled)announce(`History load failed: ${error.message}`)}
+    })();
+    return()=>{cancelled=true};
+  },[signedIn,editingCustomer?.id]);
   async function addOpportunityComment(){const comment=opportunityComment.trim();if(!comment){announce("Enter a comment first");return;}if(!editingCustomer?.id){announce("Save the opportunity before adding comments to History");return;}try{const opportunityId=await findOpportunityId(editingCustomer.id);if(!opportunityId)throw new Error("Save the opportunity first");const saved:any=await insertSupabaseRow("opportunity_history",{opportunity_id:opportunityId,note:comment});const entry=`${new Date(saved.created_at).toLocaleString()} — ${comment}`;setOpportunityHistory(history=>({...history,[editingCustomer.id]:[...(history[editingCustomer.id]||[]),entry]}));setOpportunityComment("");announce("Comment saved to History with date and time")}catch(error:any){announce(`History save failed: ${error.message}`)}}
   const [customerOpportunityRows,setCustomerOpportunityRows]=useState<CustomerOpportunity[]>([]);
   const [quotationRows, setQuotationRows] = useState<Row[]>(records.Quotations);
@@ -280,9 +295,11 @@ export default function Home() {
       const targetRows=active==="Quotations"?quotationRows:opportunityRows;
       const selectedContact=opportunityContacts.find(contact=>contact.name===opportunityContactName);
       const commercial:Row={id:editingCustomer?.id||`${active==="Quotations"?"QUO":"OPP"}-${String(286+targetRows.length).padStart(3,"0")}`,name:recordName,account:control("Client")||control("End User")||"Unassigned client",owner:control("Employee")||"Alex Morgan",value:control("TPS Offer")||control("Supplier Total")||control("Offer Value")||"To be valued",status:control("Client Inquiry Status")||control("Project Status")||"Bidding",date:control("Offer Date")||new Date().toLocaleDateString(),details:{contactName:opportunityContactName,contactMobile:selectedContact?.phone||"",contactEmail:selectedContact?.email||"",opportunityType:control("Opportunity Type"),documentType:control("Document Type")}};
-      try{await upsertSupabaseRow("opportunities",{opportunity_code:commercial.id,project_name:commercial.name,client_id:await findClientId(commercial.account),contact_id:await findContactId(opportunityContactName,commercial.account),owner_name:commercial.owner,inquiry_status:commercial.status,status:"Active",document_type:control("Document Type")||"Inquiry",opportunity_type:control("Opportunity Type")||null,value:parseMoney(commercial.value),currency:control("Currency")||"SAR",last_call_date:toIsoDate(control("Last Call Date")),next_call_date:toIsoDate(control("Next Call Date")),scope_of_work:control("Scope Note")||control("Scope of Work")||null,notes:control("Notes")||null,close_date:toIsoDate(commercial.date)},"opportunity_code")}catch(error:any){announce(`Save failed: ${error.message}`);return}
       const comment=opportunityComment.trim()||control("Comments");
-      if(comment){const entry=`${new Date().toLocaleString()} — ${comment}`;setOpportunityHistory(history=>({...history,[commercial.id]:[...(history[commercial.id]||[]),entry]}));}
+      try{
+        const savedOpportunity:any=await upsertSupabaseRow("opportunities",{opportunity_code:commercial.id,project_name:commercial.name,client_id:await findClientId(commercial.account),contact_id:await findContactId(opportunityContactName,commercial.account),owner_name:commercial.owner,inquiry_status:commercial.status,status:"Active",document_type:control("Document Type")||"Inquiry",opportunity_type:control("Opportunity Type")||null,value:parseMoney(commercial.value),currency:control("Currency")||"SAR",last_call_date:toIsoDate(control("Last Call Date")),next_call_date:toIsoDate(control("Next Call Date")),scope_of_work:control("Scope Note")||control("Scope of Work")||null,notes:control("Notes")||null,close_date:toIsoDate(commercial.date)},"opportunity_code");
+        if(comment){const savedHistory:any=await insertSupabaseRow("opportunity_history",{opportunity_id:savedOpportunity.id,note:comment});const entry=`${new Date(savedHistory.created_at).toLocaleString()} — ${comment}`;setOpportunityHistory(history=>({...history,[commercial.id]:[...(history[commercial.id]||[]),entry]}));}
+      }catch(error:any){announce(`Save failed: ${error.message}`);return}
       const update=(rows:Row[])=>editingCustomer?rows.map(row=>row.id===editingCustomer.id?commercial:row):[commercial,...rows];
       active==="Quotations"?setQuotationRows(update):setOpportunityRows(update);
       setDrawer(false);setEditingCustomer(null);announce(comment?"Comment added to History with date and time":editingCustomer?"Commercial record updated":"New commercial record added");return;

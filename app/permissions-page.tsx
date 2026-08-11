@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { readSupabaseTable, supabase, upsertSupabaseRow } from "./supabase";
+import { readSupabaseTable, supabase } from "./supabase";
 
 type Access = { view: boolean; edit: boolean };
 type PermissionRow = { user_id: string; email: string; display_name: string | null; role: string; permissions: Record<string, Access> };
@@ -33,8 +33,14 @@ export default function PermissionsPage({ announce, employees = [] }: { announce
           role: "user",
           permissions: {},
         }));
-        const employeeNames = new Set(employeeAccess.map((row) => row.display_name));
-        const merged = [...data.filter((row) => !row.display_name || !employeeNames.has(row.display_name)), ...employeeAccess];
+        const normalized = (value?: string | null) => (value || "").trim().toLowerCase();
+        const merged = [
+          ...data,
+          ...employeeAccess.filter((employee) => !data.some((user) =>
+            normalized(user.email) === normalized(employee.email)
+            || normalized(user.display_name) === normalized(employee.display_name)
+          )),
+        ];
         setRows(merged);
         setSelectedId((current) => current && merged.some((row) => row.user_id === current) ? current : merged[0]?.user_id || "");
       } catch (error: any) { announce(`Could not load permissions: ${error.message}`); }
@@ -56,20 +62,33 @@ export default function PermissionsPage({ announce, employees = [] }: { announce
   }
   async function save() {
     if (!selected || !isAdmin) return;
-    if (isEmployeeOnly) { announce("Create a Supabase user account for this employee before assigning access"); return; }
     if (newPassword !== confirmPassword) { announce("New password and confirm password do not match"); return; }
+    if (isEmployeeOnly && !newPassword) { announce("Enter and confirm a password to create this employee account"); return; }
     if (newPassword && newPassword.length < 8) { announce("Password must contain at least 8 characters"); return; }
     setSaving(true);
     try {
-      await upsertSupabaseRow("user_permissions", { ...selected, updated_at: new Date().toISOString() }, "user_id");
-      if (newPassword) {
-        const session = (await supabase?.auth.getSession())?.data.session;
-        if (!session) throw new Error("An administrator session is required to change passwords");
-        const response = await fetch("/api/admin/users/password", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ userId: selected.user_id, password: newPassword }) });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "Password update failed");
-        setNewPassword(""); setConfirmPassword("");
+      const session = (await supabase?.auth.getSession())?.data.session;
+      if (!session) throw new Error("An administrator session is required to manage users");
+      const response = await fetch("/api/admin/users/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          userId: isEmployeeOnly ? undefined : selected.user_id,
+          employeeId: isEmployeeOnly ? selected.user_id.replace(/^employee:/, "") : undefined,
+          email: selected.email,
+          displayName: selected.display_name,
+          role: selected.role,
+          permissions: selected.permissions,
+          password: newPassword || undefined,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "User access save failed");
+      if (result.user) {
+        setRows((current) => current.map((row) => row.user_id === selected.user_id ? result.user : row));
+        setSelectedId(result.user.user_id);
       }
+      setNewPassword(""); setConfirmPassword("");
       announce(`User access saved for ${selected.email}`);
     } catch (error: any) { announce(`User access save failed: ${error.message}`); }
     finally { setSaving(false); }
@@ -79,11 +98,11 @@ export default function PermissionsPage({ announce, employees = [] }: { announce
   return <div className="permissions-layout">
     <aside className="permissions-users"><div className="permissions-list-head"><span>USERS &amp; EMPLOYEES</span><strong>{rows.length}</strong></div>{rows.map((row) => <button key={row.user_id} className={selected?.user_id === row.user_id ? "active" : ""} onClick={() => { setSelectedId(row.user_id); setNewPassword(""); setConfirmPassword(""); }}><i>{(row.display_name || row.email).slice(0, 2).toUpperCase()}</i><span><strong>{row.display_name || row.email.split("@")[0]}</strong><small>{row.user_id.startsWith("employee:") ? "Employee - account not provisioned" : row.email}</small></span></button>)}</aside>
     <article className="permissions-shell">{!selected ? <div className="permissions-empty">No users or employees are available yet.</div> : <>
-      <header className="permissions-header"><div><span>ACCESS PROFILE</span><h2>{selected.display_name || selected.email}</h2><p>{selected.email}</p></div><label>User category<select value={selected.role} disabled={!isAdmin || isEmployeeOnly} onChange={(event) => updateSelected((row) => ({ ...row, role: event.target.value }))}><option value="admin">Administrator</option><option value="user">User</option><option value="other">Others</option></select></label></header>
-      <div className="permissions-passwords"><label>New password<input type="password" autoComplete="new-password" value={newPassword} disabled={!isAdmin || isEmployeeOnly} onChange={(event) => setNewPassword(event.target.value)} placeholder="Minimum 8 characters" /></label><label>Confirm password<input type="password" autoComplete="new-password" value={confirmPassword} disabled={!isAdmin || isEmployeeOnly} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat new password" /></label></div>
-      <div className="permissions-note"><strong>{isEmployeeOnly ? "Employee record" : isAdmin ? "Administrator controls" : "Read-only access"}</strong><span>{isEmployeeOnly ? "Create a Supabase user account for this employee before assigning permissions." : isAdmin ? "Choose the user category, password, and module access." : "Only administrators can change user access."}</span></div>
-      <div className="permission-matrix"><div className="permission-matrix-head"><span>Module</span><span>View</span><span>Edit</span></div>{modules.map((module) => { const access = selected.permissions?.[module] || { view: false, edit: false }; return <div className="permission-row" key={module}><span><b>{module.slice(0, 2).toUpperCase()}</b><strong>{labels[module] || module}</strong></span><label><input type="checkbox" checked={access.view} disabled={!isAdmin || isEmployeeOnly || selected.role === "admin"} onChange={(event) => setModule(module, "view", event.target.checked)} /></label><label><input type="checkbox" checked={access.edit} disabled={!isAdmin || isEmployeeOnly || selected.role === "admin"} onChange={(event) => setModule(module, "edit", event.target.checked)} /></label></div>; })}</div>
-      <footer className="permissions-footer"><span>{isEmployeeOnly ? "Account provisioning is required before access can be granted." : selected.role === "admin" ? "Administrators always have full access." : "Edit permission automatically includes view permission."}</span><button disabled={!isAdmin || isEmployeeOnly || saving} onClick={save}>{saving ? "Saving..." : "Save user access"}</button></footer>
+      <header className="permissions-header"><div><span>ACCESS PROFILE</span><h2>{selected.display_name || selected.email}</h2><p>{selected.email}</p></div><label>User category<select value={selected.role} disabled={!isAdmin} onChange={(event) => updateSelected((row) => ({ ...row, role: event.target.value }))}><option value="admin">Administrator</option><option value="user">User</option><option value="other">Others</option></select></label></header>
+      <div className="permissions-passwords"><label>New password<input type="password" autoComplete="new-password" value={newPassword} disabled={!isAdmin} onChange={(event) => setNewPassword(event.target.value)} placeholder="Minimum 8 characters" /></label><label>Confirm password<input type="password" autoComplete="new-password" value={confirmPassword} disabled={!isAdmin} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat new password" /></label></div>
+      <div className="permissions-note"><strong>{isEmployeeOnly ? "Create employee account" : isAdmin ? "Administrator controls" : "Read-only access"}</strong><span>{isEmployeeOnly ? "Set a category, password, and permissions, then save to create the Supabase account." : isAdmin ? "Choose the user category, password, and module access." : "Only administrators can change user access."}</span></div>
+      <div className="permission-matrix"><div className="permission-matrix-head"><span>Module</span><span>View</span><span>Edit</span></div>{modules.map((module) => { const access = selected.permissions?.[module] || { view: false, edit: false }; return <div className="permission-row" key={module}><span><b>{module.slice(0, 2).toUpperCase()}</b><strong>{labels[module] || module}</strong></span><label><input type="checkbox" checked={access.view} disabled={!isAdmin || selected.role === "admin"} onChange={(event) => setModule(module, "view", event.target.checked)} /></label><label><input type="checkbox" checked={access.edit} disabled={!isAdmin || selected.role === "admin"} onChange={(event) => setModule(module, "edit", event.target.checked)} /></label></div>; })}</div>
+      <footer className="permissions-footer"><span>{isEmployeeOnly ? "Saving will create the employee login and access profile." : selected.role === "admin" ? "Administrators always have full access." : "Edit permission automatically includes view permission."}</span><button disabled={!isAdmin || saving} onClick={save}>{saving ? "Saving..." : isEmployeeOnly ? "Create account & save access" : "Save user access"}</button></footer>
     </>}</article>
   </div>;
 }

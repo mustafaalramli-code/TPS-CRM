@@ -1,822 +1,1588 @@
 "use client";
-
-import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { deleteSupabaseRow, insertSupabaseRow, readSupabaseTable, supabase, upsertSupabaseRow } from "./supabase";
 import PermissionsPage from "./permissions-page";
-
-type Row = { id: string; name: string; account: string; owner: string; value: string; status: string; date: string; phone?:string; email?:string; region?:string; location?:string; details?:Record<string,string> };
-type WonProject = { id: string; customerId:string; name: string; type: string; status: string; progress: string; start: string; due: string };
-type CustomerOpportunity = { customerId:string; id:string; name:string; type:string; documentType?:string; value:string; stage:string; owner:string; close:string };
+type Row = {
+    id: string;
+    name: string;
+    account: string;
+    owner: string;
+    value: string;
+    status: string;
+    date: string;
+    phone?: string;
+    email?: string;
+    region?: string;
+    location?: string;
+    details?: Record<string, any>;
+};
+type WonProject = {
+    id: string;
+    customerId: string;
+    name: string;
+    type: string;
+    status: string;
+    progress: string;
+    start: string;
+    due: string;
+};
+type CustomerOpportunity = {
+    customerId: string;
+    id: string;
+    name: string;
+    type: string;
+    documentType?: string;
+    value: string;
+    stage: string;
+    owner: string;
+    close: string;
+};
 const supplierNames: string[] = [];
-const clientContactDetails: {client:string;name:string;phone:string;email:string;region:string;location:string}[] = [];
+const clientContactDetails: {
+    client: string;
+    name: string;
+    phone: string;
+    email: string;
+    region: string;
+    location: string;
+}[] = [];
 const TPS_COMPANY_NAME = "Technology Products and Services (TPS)";
-
-function clientRowFromDatabase(item:any):Row {
-  return {
-    id:item.client_code,
-    name:item.name,
-    account:item.phone||"No primary contact",
-    owner:item.owner_name||"Unassigned",
-    value:"$0",
-    status:item.status||"Active",
-    date:new Date(item.updated_at||item.created_at).toLocaleDateString(),
-    phone:item.phone||"",
-    email:item.email||"",
-    region:item.region||"",
-    location:item.location||"",
-    details:{nameArabic:item.name_ar||"",clientType:item.client_type||""},
-  };
+function clientRowFromDatabase(item: any): Row {
+    return {
+        id: item.client_code,
+        name: item.name,
+        account: item.phone || "No primary contact",
+        owner: item.owner_name || "Unassigned",
+        value: "$0",
+        status: item.status || "Active",
+        date: new Date(item.updated_at || item.created_at).toLocaleDateString(),
+        phone: item.phone || "",
+        email: item.email || "",
+        region: item.region || "",
+        location: item.location || "",
+        details: { nameArabic: item.name_ar || "", clientType: item.client_type || "" },
+    };
 }
-
 const navigation = [
-  { icon:"OV", label:"Overview", color:"blue" }, { icon:"CU", label:"Customers", color:"purple" },
-  { icon:"CO", label:"Contacts", color:"cyan" }, { icon:"OP", label:"Opportunities", color:"green" },
-  { icon:"PR", label:"Projects", color:"pink" },
-  { icon:"SU", label:"Suppliers", color:"teal" }, { icon:"AC", label:"Activities", color:"magenta" },
-  { icon:"TS", label:"Tasks", color:"yellow" }, { icon:"EM", label:"Employees", color:"indigo" },
-  { icon:"DI", label:"Directory", color:"cyan" }, { icon:"RP", label:"Reports", color:"red" },
+    { icon: "OV", label: "Overview", color: "blue" }, { icon: "CU", label: "Customers", color: "purple" },
+    { icon: "CO", label: "Contacts", color: "cyan" }, { icon: "OP", label: "Opportunities", color: "green" },
+    { icon: "PR", label: "Projects", color: "pink" },
+    { icon: "SU", label: "Suppliers", color: "teal" }, { icon: "AC", label: "Activities", color: "magenta" },
+    { icon: "TS", label: "Tasks", color: "yellow" }, { icon: "EM", label: "Employees", color: "indigo" },
+    { icon: "DI", label: "Directory", color: "cyan" }, { icon: "RP", label: "Reports", color: "red" },
 ];
-
 const records: Record<string, Row[]> = {
-  Customers: [], Opportunities: [], Quotations: [], Projects: [], Contacts: [],
-  Suppliers: [], Activities: [], Tasks: [], Employees: [],
+    Customers: [], Opportunities: [], Quotations: [], Projects: [], Contacts: [],
+    Suppliers: [], Activities: [], Tasks: [], Employees: [],
 };
-
-const sourceCounts: Record<string, number> = { Customers:0, Contacts:0, Opportunities:0, Projects:0, Suppliers:0, Activities:0, Tasks:0, Employees:0 };
-
-const pageCopy: Record<string, [string, string]> = {
-  Customers:["Maintain Clients", "Manage clients, contacts, and client health."],
-  Opportunities:["Opportunities", "Track opportunities through the commercial pipeline."],
-  Projects:["Projects", "Keep delivery milestones, owners, and progress on track."],
-  Contacts:["Contacts", "Manage the 986 people linked to client accounts."],
-  Suppliers:["Suppliers", "Manage supplier records, scopes, offers, and opportunity links."],
-  Activities:["Activities", "Record calls, meetings, notes, and account attachments."],
-  Tasks:["Tasks", "Assign priorities, due dates, completion, and attachments."],
-  Employees:["Employees", "Manage internal users, roles, contact details, and assignments."],
-  Directory:["Business directory", "Browse regions, branches, end users, categories, and lookup data."],
-  Reports:["Reports", "Explore performance across sales and delivery."],
-  "Team & access":["User permissions", "Control what each user can view and modify."],
+const sourceCounts: Record<string, number> = { Customers: 0, Contacts: 0, Opportunities: 0, Projects: 0, Suppliers: 0, Activities: 0, Tasks: 0, Employees: 0 };
+const pageCopy: Record<string, [
+    string,
+    string
+]> = {
+    Customers: ["Maintain Clients", "Manage clients, contacts, and client health."],
+    Opportunities: ["Opportunities", "Track opportunities through the commercial pipeline."],
+    Projects: ["Projects", "Keep delivery milestones, owners, and progress on track."],
+    Contacts: ["Contacts", "Manage the 986 people linked to client accounts."],
+    Suppliers: ["Suppliers", "Manage supplier records, scopes, offers, and opportunity links."],
+    Activities: ["Activities", "Record calls, meetings, notes, and account attachments."],
+    Tasks: ["Tasks", "Assign priorities, due dates, completion, and attachments."],
+    Employees: ["Employees", "Manage internal users, roles, contact details, and assignments."],
+    Directory: ["Business directory", "Browse regions, branches, end users, categories, and lookup data."],
+    Reports: ["Reports", "Explore performance across sales and delivery."],
+    "Team & access": ["User permissions", "Control what each user can view and modify."],
 };
-
 function selectValues(field: string, module = "") {
-  if (field === "Document Type") return ["Case", "Case Solved", "Delivered", "Inquiry", "Letter", "Offer", "Order", "Task", "Secured"];
-  if (field === "How Found Type") return ["Current Client", "Referral", "Website", "Tender Portal", "Consultant", "Other"];
-  if (field === "Task Type") return ["Inquiry", "Offer", "Case", "Others"];
-  if (field === "Opportunity Type") return ["Canal Water", "Grey Water", "Sanitary Waste Water Plant", "Desilination Plant", "DAMS & RAINWATER PLANTS", "Others"];
-  if (field === "Account Type") return module === "Suppliers" ? ["Supplier"] : ["Client"];
-  if (field.includes("Currency")) return ["SAR", "USD", "EUR", "GBP"];
-  if (field.includes("Category")) return module === "Suppliers" ? ["Industrial equipment", "Electrical systems", "Process automation", "Services"] : ["Client"];
-  if (field.includes("Project Status")) return ["New", "In progress", "On hold", "Completed", "Cancelled"];
-  if (field.includes("Status")) return ["Active", "Pending", "Completed", "At risk", "Closed"];
-  if (field.includes("Type")) return ["New", "Existing", "Renewal", "Service"];
-  return ["Active", "Pending", "Completed"];
+    if (field === "Document Type")
+        return ["Case", "Case Solved", "Delivered", "Inquiry", "Letter", "Offer", "Order", "Task", "Secured"];
+    if (field === "How Found Type")
+        return ["Current Client", "Referral", "Website", "Tender Portal", "Consultant", "Other"];
+    if (field === "Task Type")
+        return ["Inquiry", "Offer", "Case", "Others"];
+    if (field === "Opportunity Type")
+        return ["Canal Water", "Grey Water", "Sanitary Waste Water Plant", "Desilination Plant", "DAMS & RAINWATER PLANTS", "Others"];
+    if (field === "Account Type")
+        return module === "Suppliers" ? ["Supplier"] : ["Client"];
+    if (field.includes("Currency"))
+        return ["SAR", "USD", "EUR", "GBP"];
+    if (field.includes("Category"))
+        return module === "Suppliers" ? ["Industrial equipment", "Electrical systems", "Process automation", "Services"] : ["Client"];
+    if (field.includes("Project Status"))
+        return ["New", "In progress", "On hold", "Completed", "Cancelled"];
+    if (field.includes("Status"))
+        return ["Active", "Pending", "Completed", "At risk", "Closed"];
+    if (field.includes("Type"))
+        return ["New", "Existing", "Renewal", "Service"];
+    return ["Active", "Pending", "Completed"];
 }
-
 function customerFieldValue(field: string, customer: Row | null, module = "") {
-  const isEmployeeField = field.includes("Handled") || field.includes("Assigned To") || field === "Employee" || field.includes("Responsible");
-  if (isEmployeeField) return customer?.owner || "";
-  if (field === "Account Type" || field === "Client Type") return module === "Suppliers" ? "Supplier" : "Client";
-  if (module === "Employees") {
-    if (!customer) return field === "Company" ? TPS_COMPANY_NAME : "";
-    const employeeValues: Record<string,string> = {"Employee ID":customer.id,"First Name":customer.name.split(" ")[0],"Last Name":customer.name.split(" ").slice(1).join(" "),"Company":customer.account,"Job Title":customer.value,"Department":customer.owner,"E-mail Address":customer.email||"","Business Phone":customer.details?.businessPhone||"","Home Phone":customer.details?.homePhone||"","Mobile Phone":customer.phone||"","Fax Number":customer.details?.faxNumber||"","Web Page":customer.details?.webPage||"","Street":customer.details?.street||"","City":customer.location||"","State / Province":customer.details?.stateProvince||"","ZIP / Postal Code":customer.details?.postalCode||"","Country / Region":customer.region||""};
-    return employeeValues[field] || "";
-  }
-  if (!customer) return "";
-  if (module === "Tasks") {
-    const taskValues:Record<string,string>={"Project Name":customer.name,"Task Type":"Others","Client":customer.account,"Employee":customer.owner,"Project Status":customer.status,"Next Call":customer.date,"Offer Value":customer.value};
-    return taskValues[field] || "";
-  }
-  if (module === "Contacts") {
-    const contactValues:Record<string,string>={"ContactID":customer.id,"First Name":customer.name.split(" ")[0],"Last Name":customer.name.split(" ").slice(1).join(" "),"Full Name":customer.name,"Company":customer.account,"Job Title":customer.value,"Department":customer.owner,"E-mail Address":`${customer.name.toLowerCase().replace(/ /g,".")}@client.example`};
-    return contactValues[field] || "";
-  }
-  if (module === "Activities") {
-    const activityValues:Record<string,string>={"ActivityID":customer.id,"Company":customer.account,"Activity Type":customer.value,"Activity Date":customer.date,"Description":customer.name,"Notes":customer.status};
-    return activityValues[field] || "";
-  }
-  if (module === "Opportunities" || module === "Quotations") {
-    const commercialValues:Record<string,string>={"Project Name":customer.name,"Employee":customer.owner,"End User":customer.account,"Offer Value":customer.value,"Project Status":customer.status,"Offer Date":customer.date};
-    return commercialValues[field] || "";
-  }
-  const values: Record<string,string> = { "AccountID":customer.id, "Account Name":customer.name, "Client Name":customer.name, "Client Name - Arabic":customer.details?.nameArabic||"", "Client Number":customer.id, "Handled by":customer.owner, "Account Type":"Client", "Client Type":customer.details?.clientType||"", "Category":"Client", "Phone":customer.phone||"", "Email":customer.email||"", "Country / Region":customer.region||"", "City":customer.location||"", "Call Status":customer.status, "Notes":`Account value ${customer.value}` };
-  return values[field] || "";
+    const isEmployeeField = field.includes("Handled") || field.includes("Assigned To") || field === "Employee" || field.includes("Responsible");
+    if (isEmployeeField)
+        return customer?.owner || "";
+    if (field === "Account Type" || field === "Client Type")
+        return module === "Suppliers" ? "Supplier" : "Client";
+    if (module === "Employees") {
+        if (!customer)
+            return field === "Company" ? TPS_COMPANY_NAME : "";
+        const employeeValues: Record<string, string> = { "Employee ID": customer.id, "First Name": customer.name.split(" ")[0], "Last Name": customer.name.split(" ").slice(1).join(" "), "Company": customer.account, "Job Title": customer.value, "Department": customer.owner, "E-mail Address": customer.email || "", "Business Phone": customer.details?.businessPhone || "", "Home Phone": customer.details?.homePhone || "", "Mobile Phone": customer.phone || "", "Fax Number": customer.details?.faxNumber || "", "Web Page": customer.details?.webPage || "", "Street": customer.details?.street || "", "City": customer.location || "", "State / Province": customer.details?.stateProvince || "", "ZIP / Postal Code": customer.details?.postalCode || "", "Country / Region": customer.region || "" };
+        return employeeValues[field] || "";
+    }
+    if (!customer)
+        return "";
+    if (module === "Tasks") {
+        const taskValues: Record<string, string> = { "Project Name": customer.name, "Task Type": "Others", "Client": customer.account, "Employee": customer.owner, "Project Status": customer.status, "Next Call": customer.date, "Offer Value": customer.value };
+        return taskValues[field] || "";
+    }
+    if (module === "Contacts") {
+        const contactValues: Record<string, string> = { "ContactID": customer.id, "First Name": customer.name.split(" ")[0], "Last Name": customer.name.split(" ").slice(1).join(" "), "Full Name": customer.name, "Company": customer.account, "Job Title": customer.value, "Department": customer.owner, "E-mail Address": `${customer.name.toLowerCase().replace(/ /g, ".")}@client.example` };
+        return contactValues[field] || "";
+    }
+    if (module === "Activities") {
+        const activityValues: Record<string, string> = { "ActivityID": customer.id, "Company": customer.account, "Activity Type": customer.value, "Activity Date": customer.date, "Description": customer.name, "Notes": customer.status };
+        return activityValues[field] || "";
+    }
+    if (module === "Opportunities" || module === "Quotations") {
+        const commercialValues: Record<string, string> = { "Project Name": customer.name, "Employee": customer.owner, "End User": customer.account, "Offer Value": customer.value, "Project Status": customer.status, "Offer Date": customer.date };
+        return commercialValues[field] || "";
+    }
+    const values: Record<string, string> = { "AccountID": customer.id, "Account Name": customer.name, "Client Name": customer.name, "Client Name - Arabic": customer.details?.nameArabic || "", "Client Number": customer.id, "Handled by": customer.owner, "Account Type": "Client", "Client Type": customer.details?.clientType || "", "Category": "Client", "Phone": customer.phone || "", "Email": customer.email || "", "Country / Region": customer.region || "", "City": customer.location || "", "Call Status": customer.status, "Notes": `Account value ${customer.value}` };
+    return values[field] || "";
 }
-
-function VoiceTextarea({defaultValue="",onValueChange}:{defaultValue?:string,onValueChange?:(value:string)=>void}) {
-  const [value,setValue]=useState(defaultValue); const [listening,setListening]=useState(false); const [message,setMessage]=useState(""); const recognition=useRef<any>(null);
-  function toggleVoice(){
-    if(listening){recognition.current?.stop();setListening(false);return;}
-    const SpeechRecognition=(window as any).SpeechRecognition||(window as any).webkitSpeechRecognition;
-    if(!SpeechRecognition){setMessage("Voice typing is not supported in this browser.");return;}
-    const instance=new SpeechRecognition(); recognition.current=instance; instance.lang="en-US"; instance.continuous=true; instance.interimResults=false;
-    instance.onresult=(event:any)=>{let speech="";for(let i=event.resultIndex;i<event.results.length;i++)speech+=event.results[i][0].transcript;setValue(current=>{const next=`${current}${current?" ":""}${speech}`;onValueChange?.(next);return next})};
-    instance.onerror=()=>{setMessage("Microphone access was not available.");setListening(false)}; instance.onend=()=>setListening(false); instance.start(); setMessage(""); setListening(true);
-  }
-  return <div className="voice-field"><textarea value={value} onChange={e=>{setValue(e.target.value);onValueChange?.(e.target.value)}} placeholder="Type or use the microphone..."/><button type="button" className={listening?"listening":""} onClick={toggleVoice} aria-label={listening?"Stop voice typing":"Start voice typing"}><span>MIC</span>{listening?" Stop listening":" Dictate"}</button>{message&&<small>{message}</small>}</div>;
-}
-
-function toIsoDate(value:string){if(!value)return null;const date=new Date(value);return Number.isNaN(date.getTime())?null:date.toISOString().slice(0,10)}
-function parseMoney(value:string){const number=Number(value.replace(/[^0-9.-]/g,""));return Number.isFinite(number)?number:null}
-
-function LoginScreen({onError}:{onError:(message:string)=>void}){
-  const [email,setEmail]=useState("mustafa.alramly@live.com");
-  const [password,setPassword]=useState("");
-  const [busy,setBusy]=useState(false);
-  async function login(event:FormEvent){
-    event.preventDefault();
-    if(!supabase)return;
-    setBusy(true);onError("");
-    const {error}=await supabase.auth.signInWithPassword({email,password});
-    setBusy(false);
-    if(error)onError(error.message);
-  }
-  return <main className="login-screen"><form onSubmit={login}><img src="/tps-logo.png" alt="Technology Products and Services Co."/><p>TPS CRM</p><h1>Administrator sign in</h1><label>Email<input type="email" value={email} onChange={event=>setEmail(event.target.value)} required autoComplete="username"/></label><label>Password<input type="password" value={password} onChange={event=>setPassword(event.target.value)} required autoComplete="current-password"/></label><button disabled={busy}>{busy?"Signing in...":"Sign in"}</button></form></main>;
-}
-
-export default function Home() {
-  const [sessionReady,setSessionReady]=useState(false);
-  const [signedIn,setSignedIn]=useState(false);
-  const [authError,setAuthError]=useState("");
-  const [active, setActive] = useState("Overview");
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("All statuses");
-  const [notice, setNotice] = useState("");
-  const [directoryTarget,setDirectoryTarget]=useState("Regions");
-  const [drawer, setDrawer] = useState(false);
-  const [customerPage, setCustomerPage] = useState("General");
-  const [opportunitySection,setOpportunitySection]=useState("Inquiry Information");
-  const [projectWon,setProjectWon]=useState(false);
-  const [projectTransferBusy,setProjectTransferBusy]=useState(false);
-  const [projectStatus,setProjectStatus]=useState("New");
-  const [projectProgress,setProjectProgress]=useState(15);
-  const [clientOrderEnabled,setClientOrderEnabled]=useState(false);
-  useEffect(()=>{if(active==="Opportunities"&&!['Inquiry Information','History',...(projectWon?['Project']:[])].includes(opportunitySection))setOpportunitySection("Inquiry Information")},[active,opportunitySection,projectWon]);
-  useEffect(()=>{if(!drawer)setClientOrderEnabled(false)},[drawer]);
-  const [contactRows, setContactRows] = useState([1]);
-  const [editingCustomer, setEditingCustomer] = useState<Row | null>(null);
-  const [wonProjects, setWonProjects] = useState<WonProject[]>([]);
-  const [employeeRows, setEmployeeRows] = useState<Row[]>(records.Employees);
-  const [contactListRows, setContactListRows] = useState<Row[]>(records.Contacts);
-  const [customerRows, setCustomerRows] = useState<Row[]>(records.Customers);
-  const [supplierRows, setSupplierRows] = useState<Row[]>(records.Suppliers);
-  const supplierNames = supplierRows.map(supplier => supplier.name);
-  const [taskRows, setTaskRows] = useState<Row[]>(records.Tasks);
-  const [projectRows,setProjectRows]=useState<Row[]>(records.Projects);
-  useEffect(()=>{try{const saved=window.localStorage.getItem("tps-user-project-rows");if(saved)setProjectRows(JSON.parse(saved))}catch{}},[]);
-  const [equipmentValues,setEquipmentValues]=useState(["Pumps","Valves","Control Panels","Instrumentation","Water Treatment Package","Electrical Equipment"]);
-  useEffect(()=>{try{const saved=window.localStorage.getItem("tps-equipment-values");if(saved)setEquipmentValues(JSON.parse(saved))}catch{}},[]);
-  const [projectTypeValues,setProjectTypeValues]=useState(["Supply","Service"]);
-  useEffect(()=>{try{const saved=window.localStorage.getItem("tps-project-type-values");if(saved)setProjectTypeValues(JSON.parse(saved))}catch{}},[]);
-  const [opportunityRows, setOpportunityRows] = useState<Row[]>(records.Opportunities);
-  const visibleOpportunityRows=useMemo(()=>opportunityRows.filter(row=>row.status.trim().toLowerCase()!=="won"),[opportunityRows]);
-  const [opportunityHistory,setOpportunityHistory]=useState<Record<string,string[]>>({});
-  const [opportunityComment,setOpportunityComment]=useState("");
-  const [opportunityClientContext,setOpportunityClientContext]=useState("");
-  const [opportunityContactName,setOpportunityContactName]=useState("");
-  const opportunityClientName=opportunityClientContext||editingCustomer?.account||"";
-  const opportunityContacts=useMemo(()=>{
-    const linked=[...contactListRows.filter(contact=>contact.account===opportunityClientName),...clientContactDetails.filter(contact=>contact.client===opportunityClientName).map((contact,index)=>({id:`linked-${index}`,name:contact.name,account:contact.client,owner:"",value:"",status:"Active",date:"",phone:contact.phone,email:contact.email,region:contact.region,location:contact.location}))];
-    const unique=linked.filter((contact,index,all)=>all.findIndex(item=>item.name===contact.name)===index);
-    return opportunityClientName?[...unique,{id:"__add_contact",name:"+ Add new contact...",account:opportunityClientName,owner:"",value:"",status:"",date:"",phone:"",email:"",region:"",location:""}]:unique;
-  },[contactListRows,opportunityClientName]);
-  const opportunityContact=opportunityContacts.find(contact=>contact.name===opportunityContactName);
-  useEffect(()=>{
-    if(opportunityContactName!=="+ Add new contact...")return;
-    const client=customerRows.find(item=>item.name===opportunityClientName);
-    setOpportunityContactName("");
-    if(!client){announce("Choose a client before adding a contact");return;}
-    setActive("Customers");setEditingCustomer(client);setCustomerPage("Contacts");setContactRows([Number(client.id.replace(/\D/g,""))]);setDrawer(true);
-  },[opportunityContactName,opportunityClientName,customerRows]);
-  useEffect(()=>{setOpportunityComment("");setProjectWon(false);setProjectStatus("New");setProjectProgress(15)},[editingCustomer?.id]);
-  async function findOpportunityId(code:string){if(!supabase)return null;const {data,error}=await supabase.from("opportunities").select("id").eq("opportunity_code",code).maybeSingle();if(error)throw error;return data?.id||null}
-  useEffect(()=>{
-    const opportunityCode=editingCustomer?.id;
-    if(!signedIn||!supabase||!opportunityCode||(!opportunityCode.startsWith("OPP-")&&!opportunityCode.startsWith("QUO-")))return;
-    let cancelled=false;
-    (async()=>{
-      try{
-        const opportunityId=await findOpportunityId(opportunityCode);
-        if(!opportunityId){if(!cancelled)setOpportunityHistory(history=>({...history,[opportunityCode]:[]}));return;}
-        const {data,error}=await supabase.from("opportunity_history").select("note,created_at").eq("opportunity_id",opportunityId).order("created_at",{ascending:true});
-        if(error)throw error;
-        if(!cancelled)setOpportunityHistory(history=>({...history,[opportunityCode]:(data||[]).map((item:any)=>`${new Date(item.created_at).toLocaleString()} — ${item.note}`)}));
-      }catch(error:any){if(!cancelled)announce(`History load failed: ${error.message}`)}
-    })();
-    return()=>{cancelled=true};
-  },[signedIn,editingCustomer?.id]);
-  async function addOpportunityComment(){const comment=opportunityComment.trim();if(!comment){announce("Enter a comment first");return;}if(!editingCustomer?.id){announce("Save the opportunity before adding comments to History");return;}try{const opportunityId=await findOpportunityId(editingCustomer.id);if(!opportunityId)throw new Error("Save the opportunity first");const saved:any=await insertSupabaseRow("opportunity_history",{opportunity_id:opportunityId,note:comment});const entry=`${new Date(saved.created_at).toLocaleString()} — ${comment}`;setOpportunityHistory(history=>({...history,[editingCustomer.id]:[...(history[editingCustomer.id]||[]),entry]}));setOpportunityComment("");announce("Comment saved to History with date and time")}catch(error:any){announce(`History save failed: ${error.message}`)}}
-  const [customerOpportunityRows,setCustomerOpportunityRows]=useState<CustomerOpportunity[]>([]);
-  const [quotationRows, setQuotationRows] = useState<Row[]>(records.Quotations);
-  useEffect(()=>{if(!supabase){setSessionReady(true);return}supabase.auth.getSession().then(({data})=>{setSignedIn(Boolean(data.session));setSessionReady(true)});const {data}=supabase.auth.onAuthStateChange((_event,session)=>{setSignedIn(Boolean(session));setSessionReady(true)});return()=>data.subscription.unsubscribe()},[]);
-  useEffect(()=>{if(!signedIn)return;Promise.all([readSupabaseTable<any>("clients"),readSupabaseTable<any>("contacts"),readSupabaseTable<any>("suppliers"),readSupabaseTable<any>("opportunities"),readSupabaseTable<any>("projects"),readSupabaseTable<any>("employees")]).then(([clients,contacts,suppliers,opportunities,projects,employees])=>{const clientName=new Map(clients.map((item:any)=>[item.id,item.name]));const contactById=new Map(contacts.map((item:any)=>[item.id,item]));setCustomerRows(clients.map((item:any)=>({id:item.client_code,name:item.name,account:item.phone||"No primary contact",owner:item.owner_name||"Unassigned",value:"$0",status:item.status||"Active",date:new Date(item.updated_at||item.created_at).toLocaleDateString(),phone:item.phone||"",email:item.email||"",region:item.region||"",location:item.location||""})));setContactListRows(contacts.map((item:any)=>({id:item.contact_code,name:item.full_name,account:clientName.get(item.client_id)||"Unassigned client",owner:item.department||"",value:item.job_title||"",status:item.role||"Active",date:new Date(item.updated_at||item.created_at).toLocaleDateString(),phone:item.mobile_phone||"",email:item.email||"",region:item.region||"",location:item.location||"",details:{databaseId:item.id}})));setSupplierRows(suppliers.map((item:any)=>({id:item.supplier_code,name:item.name,account:"Supplier",owner:item.region||"",value:item.scope||"",status:item.status||"Active",date:new Date(item.updated_at||item.created_at).toLocaleDateString(),phone:item.phone||"",email:item.email||"",region:item.region||""})));setOpportunityRows(opportunities.map((item:any)=>{const contact:any=contactById.get(item.contact_id);return {id:item.opportunity_code,name:item.project_name,account:clientName.get(item.client_id)||"Unassigned client",owner:item.owner_name||"Unassigned",value:item.value==null?"To be valued":`${item.currency||"SAR"} ${item.value}`,status:item.inquiry_status||item.status||"Inquiry",date:item.close_date||item.next_call_date||"",details:{contactName:contact?.full_name||"",contactMobile:contact?.mobile_phone||"",contactEmail:contact?.email||"",opportunityType:item.opportunity_type||"",documentType:item.document_type||""}}}));setProjectRows(projects.map((item:any)=>({id:item.project_code,name:item.name,account:clientName.get(item.client_id)||"Unassigned client",owner:item.owner_name||"Unassigned",value:`${item.progress||0}%`,status:item.status||"New",date:item.estimated_end_date||""})));setEmployeeRows(employees.map((item:any)=>({id:item.employee_code,name:`${item.first_name} ${item.last_name}`.trim(),account:item.company||TPS_COMPANY_NAME,owner:item.department||"Staff",value:item.job_title||"Employee",status:item.status||"Active",date:new Date(item.updated_at||item.created_at).toLocaleDateString(),phone:item.mobile_phone||"",email:item.email||"",region:item.country_region||"",location:item.city||"",details:{businessPhone:item.business_phone||"",homePhone:item.home_phone||"",faxNumber:item.fax_number||"",webPage:item.web_page||"",street:item.street||"",stateProvince:item.state_province||"",postalCode:item.postal_code||""}}))) }).catch((error:any)=>announce(`Database read failed: ${error.message}`))},[signedIn]);
-  async function findClientId(name:string, clientCodeOverride?:string){
-    if(!supabase||!name||name==="Unassigned client")return null;
-    const clientCode=clientCodeOverride||customerRows.find(client=>client.name===name)?.id;
-    let request=supabase.from("clients").select("id");
-    request=clientCode?request.eq("client_code",clientCode):request.eq("name",name);
-    const {data,error}=await request.limit(1).maybeSingle();
-    if(error)throw error;
-    return data?.id||null;
-  }
-  async function findContactId(name:string, clientName:string){
-    if(!supabase||!name)return null;
-    const localContact=contactListRows.find(contact=>contact.name===name&&contact.account===clientName);
-    if(localContact?.details?.databaseId)return localContact.details.databaseId;
-    const clientId=await findClientId(clientName);
-    let request=supabase.from("contacts").select("id").eq("full_name",name);
-    if(clientId)request=request.eq("client_id",clientId);
-    const {data,error}=await request.maybeSingle();
-    if(error)throw error;
-    return data?.id||null;
-  }
-  function navigate(label: string) { setActive(label); setQuery(""); setFilter("All statuses"); setDrawer(false); }
-  function announce(message: string) { setNotice(message); window.setTimeout(() => setNotice(""), 2200); }
-  async function transferOpportunityToProject() {
-    if(projectTransferBusy)return;
-    if(!editingCustomer?.id){announce("Save the opportunity before marking it Won");return;}
-    setProjectTransferBusy(true);
-    try{
-      const account=opportunityClientName||editingCustomer.account;
-      const clientId=await findClientId(account);
-      const savedOpportunity:any=await upsertSupabaseRow("opportunities",{
-        opportunity_code:editingCustomer.id,project_name:editingCustomer.name,client_id:clientId,
-        contact_id:await findContactId(opportunityContactName,account),owner_name:editingCustomer.owner,
-        inquiry_status:"Won",status:"Active",document_type:editingCustomer.details?.documentType||"Offer",
-        opportunity_type:editingCustomer.details?.opportunityType||null,value:parseMoney(editingCustomer.value),
-        currency:editingCustomer.details?.currency||"SAR",close_date:toIsoDate(editingCustomer.date)
-      },"opportunity_code");
-      const projectCode=editingCustomer.id.replace(/^(OPP|QUO)-/,"PRJ-");
-      const savedProject:any=await upsertSupabaseRow("projects",{
-        project_code:projectCode,opportunity_id:savedOpportunity.id,client_id:savedOpportunity.client_id||clientId,
-        name:editingCustomer.name,project_type:editingCustomer.details?.opportunityType||null,
-        owner_name:editingCustomer.owner,progress:projectProgress,status:projectStatus,
-        currency:editingCustomer.details?.currency||"SAR",value:parseMoney(editingCustomer.value),
-        estimated_end_date:toIsoDate(editingCustomer.date),updated_at:new Date().toISOString()
-      },"opportunity_id");
-      const transferredProject:Row={id:savedProject.project_code||projectCode,name:savedProject.name||editingCustomer.name,account,owner:savedProject.owner_name||editingCustomer.owner,value:`${savedProject.progress??projectProgress}%`,status:savedProject.status||projectStatus,date:savedProject.estimated_end_date||editingCustomer.date};
-      setProjectRows(rows=>{const next=rows.some(row=>row.id===transferredProject.id)?rows.map(row=>row.id===transferredProject.id?transferredProject:row):[transferredProject,...rows];window.localStorage.setItem("tps-user-project-rows",JSON.stringify(next));return next;});
-      const wonOpportunity:Row={...editingCustomer,account,status:"Won",details:{...(editingCustomer.details||{}),projectWon:"true"}};
-      setEditingCustomer(wonOpportunity);setOpportunityRows(rows=>rows.filter(row=>row.id!==wonOpportunity.id));
-      setProjectWon(true);setOpportunitySection("Project");announce("Opportunity marked Won and moved to the project list");
-    }catch(error:any){setProjectWon(false);announce(`Transfer failed: ${error.message}`)}finally{setProjectTransferBusy(false)}
-  }
-  async function saveDrawer(e: any) {
-    e.preventDefault();
-    const form=e.currentTarget as HTMLFormElement;
-    const control=(label:string)=>{const fieldLabel=Array.from(form.querySelectorAll("label")).find(item=>item.childNodes[0]?.textContent?.trim()===label);return (fieldLabel?.querySelector("input,select,textarea") as HTMLInputElement | null)?.value.trim()||"";};
-    if(active==="Contacts"||(active==="Customers"&&customerPage==="Contacts")){
-      const first=control("First Name"),last=control("Last Name"),fullName=`${first} ${last}`.trim();
-      if(!fullName){announce("Contact name is required");return}
-      const clientName=active==="Customers"?editingCustomer?.name||"":control("Company");
-      try{const contact:Row={id:active==="Contacts"&&editingCustomer?.id?editingCustomer.id:`CON-${Date.now().toString().slice(-6)}`,name:fullName,account:clientName,owner:control("Department"),value:control("Job Title"),status:control("Role")||"Primary",date:new Date().toLocaleDateString(),phone:control("Mobile Phone")||control("Business Phone"),email:control("E-mail Address"),region:control("Country / Region"),location:control("Location")};await upsertSupabaseRow("contacts",{contact_code:contact.id,client_id:await findClientId(clientName,active==="Customers"?editingCustomer?.id:undefined),full_name:contact.name,job_title:contact.value||null,department:contact.owner||null,mobile_phone:contact.phone||null,email:contact.email||null,region:contact.region||null,location:contact.location||null,role:contact.status},"contact_code");setContactListRows(rows=>rows.some(row=>row.id===contact.id)?rows.map(row=>row.id===contact.id?contact:row):[contact,...rows]);setCustomerPage("Contacts");announce("Contact saved to the database")}catch(error:any){announce(`Save failed: ${error.message}`)}return
-    }
-    if(active==="Suppliers"){
-      const name=control("Supplier Name");if(!name){announce("Supplier Name is required");return}
-      const supplier:Row={id:control("Supplier ID")||editingCustomer?.id||`SUP-${Date.now().toString().slice(-6)}`,name,account:"Supplier",owner:control("Country / Region")||control("Region"),value:control("Supplier Scope")||control("Scope of Supply / What they sell"),status:control("Status")||"Active",date:new Date().toLocaleDateString(),phone:control("Phone")||control("Mobile Phone"),email:control("Email"),region:control("Country / Region")||control("Region")};
-      try{await upsertSupabaseRow("suppliers",{supplier_code:supplier.id,name:supplier.name,account_number:control("Account Number")||null,scope:supplier.value||null,phone:supplier.phone||null,email:supplier.email||null,region:supplier.region||null,status:supplier.status},"supplier_code");setSupplierRows(rows=>rows.some(row=>row.id===supplier.id)?rows.map(row=>row.id===supplier.id?supplier:row):[supplier,...rows]);setDrawer(false);setEditingCustomer(null);announce("Supplier saved to the database")}catch(error:any){announce(`Save failed: ${error.message}`)}return
-    }
-    if (active === "Customers") {
-      if(customerPage!=="General"){setDrawer(false);announce("Client changes saved");return;}
-      const customerName=control("Client Name");
-      if(!customerName){announce("Client Name is required");return;}
-      const clientCode=editingCustomer?.id||control("Client Number")||`CUS-${String(1050+customerRows.length).padStart(4,"0")}`;
-      let customer:Row;
-      try{
-        const saved=await upsertSupabaseRow("clients",{client_code:clientCode,name:customerName,name_ar:control("Client Name - Arabic")||null,client_type:control("Client Type")||null,phone:control("Phone")||null,email:control("Email")||null,region:control("Country / Region")||null,location:control("City")||null,owner_name:control("Handled by")||editingCustomer?.owner||"Unassigned",status:editingCustomer?.status||"Active",updated_at:new Date().toISOString()},"client_code");
-        customer=clientRowFromDatabase(saved);
-      }catch(error:any){announce(`Save failed: ${error.message}`);return}
-      setCustomerRows(rows=>rows.some(row=>row.id===customer.id)?rows.map(row=>row.id===customer.id?customer:row):[customer,...rows]);
-      setDrawer(false);setEditingCustomer(null);announce(editingCustomer?"Client information saved":"New client added to the client list");return;
-    }
-    if (active === "Employees") {
-      const firstName=control("First Name"), lastName=control("Last Name");
-      if (!firstName || !lastName) { announce("First name and last name are required"); return; }
-      const employee:Row={id:control("Employee ID")||editingCustomer?.id||`EMP-${String(employeeRows.length+1).padStart(3,"0")}`,name:`${firstName} ${lastName}`,account:control("Company")||TPS_COMPANY_NAME,owner:control("Department")||"Staff",value:control("Job Title")||"Employee",status:"Active",date:new Date().toLocaleDateString(),phone:control("Mobile Phone"),email:control("E-mail Address"),region:control("Country / Region"),location:control("City"),details:{businessPhone:control("Business Phone"),homePhone:control("Home Phone"),faxNumber:control("Fax Number"),webPage:control("Web Page"),street:control("Street"),stateProvince:control("State / Province"),postalCode:control("ZIP / Postal Code")}};
-      try{await upsertSupabaseRow("employees",{employee_code:employee.id,first_name:firstName,last_name:lastName,company:employee.account,job_title:employee.value||null,department:employee.owner||null,email:employee.email||null,business_phone:employee.details?.businessPhone||null,home_phone:employee.details?.homePhone||null,mobile_phone:employee.phone||null,fax_number:employee.details?.faxNumber||null,web_page:employee.details?.webPage||null,street:employee.details?.street||null,city:employee.location||null,state_province:employee.details?.stateProvince||null,postal_code:employee.details?.postalCode||null,country_region:employee.region||null,status:employee.status,updated_at:new Date().toISOString()},"employee_code")}catch(error:any){announce(`Save failed: ${error.message}`);return}
-      setEmployeeRows(rows=>editingCustomer?rows.map(row=>row.id===editingCustomer.id?employee:row):[...rows,employee]);
-      setDrawer(false);setEditingCustomer(null);announce(editingCustomer?"Employee information saved to the database":"New employee saved to the database");return;
-    }
-    if (active === "Tasks") {
-      const form=e.currentTarget as HTMLFormElement;
-      const control=(label:string)=>{const fieldLabel=Array.from(form.querySelectorAll("label")).find(item=>item.childNodes[0]?.textContent?.trim()===label);return (fieldLabel?.querySelector("input,select,textarea") as HTMLInputElement | null)?.value.trim()||"";};
-      const taskName=control("Project Name"), taskType=control("Task Type")||"Others";
-      if(!taskName){announce("Project Name is required");return;}
-      const task:Row={id:editingCustomer?.id||`TSK-${String(42+taskRows.length).padStart(3,"0")}`,name:taskName,account:control("Client")||"Unassigned client",owner:control("Employee")||"Alex Morgan",value:control("Priority")||"Medium",status:control("Project Status")||"Open",date:control("Next Call")||new Date().toLocaleDateString()};
-      setTaskRows(rows=>editingCustomer?rows.map(row=>row.id===editingCustomer.id?task:row):[task,...rows]);
-      if(taskType==="Offer"){
-        const opportunity:Row={...task,id:`OPP-${String(285+opportunityRows.length).padStart(3,"0")}`,status:"Bidding",value:control("Offer Value")||"To be valued"};
-        setOpportunityRows(rows=>rows.some(row=>row.name===opportunity.name)?rows:[opportunity,...rows]);
-      }
-      setDrawer(false);setEditingCustomer(null);announce(taskType==="Offer"?"Offer task saved and transferred to Opportunities":editingCustomer?"Task information updated":"New task added to the task list");return;
-    }
-    if(active==="Projects"){
-      const form=e.currentTarget as HTMLFormElement;
-      const control=(label:string)=>{const fieldLabel=Array.from(form.querySelectorAll("label")).find(item=>item.childNodes[0]?.textContent?.trim()===label);return (fieldLabel?.querySelector("input,select,textarea") as HTMLInputElement|null)?.value.trim()||""};
-      const progress=(form.querySelector(".project-progress-input") as HTMLInputElement|null)?.value||editingCustomer?.value||"0%";
-      const project:Row={id:control("Project ID")||editingCustomer?.id||`PRJ-${String(120+projectRows.length).padStart(3,"0")}`,name:control("Project Name")||editingCustomer?.name||"New project",account:editingCustomer?.account||"Unassigned client",owner:editingCustomer?.owner||"Unassigned",value:progress.includes("%")?progress:`${progress}%`,status:control("Status")||editingCustomer?.status||"New",date:control("Estimated End Date")||editingCustomer?.date||new Date().toLocaleDateString()};
-      try{await upsertSupabaseRow("projects",{project_code:project.id,name:project.name,client_id:await findClientId(project.account),project_type:control("Project Type")||null,owner_name:project.owner,progress:Number(project.value.replace("%",""))||0,status:project.status,currency:control("Currency")||"SAR",value:parseMoney(control("Actual Revenue")),start_date:toIsoDate(control("Start Date")),estimated_end_date:toIsoDate(project.date),notes:control("Notes")||null},"project_code")}catch(error:any){announce(`Save failed: ${error.message}`);return}
-      const nextRows=editingCustomer?projectRows.map(row=>row.id===editingCustomer.id?project:row):[project,...projectRows];
-      setProjectRows(nextRows);window.localStorage.setItem("tps-user-project-rows",JSON.stringify(nextRows));setDrawer(false);setEditingCustomer(null);announce("Project changes saved and list updated");return;
-    }
-    if (active === "Opportunities" || active === "Quotations") {
-      const form=e.currentTarget as HTMLFormElement;
-      const control=(label:string)=>{const fieldLabel=Array.from(form.querySelectorAll("label")).find(item=>item.childNodes[0]?.textContent?.trim()===label);return (fieldLabel?.querySelector("input,select,textarea") as HTMLInputElement | null)?.value.trim()||"";};
-      const recordName=control("Project Name");
-      if(!recordName){announce("Project Name is required");return;}
-      const targetRows=active==="Quotations"?quotationRows:opportunityRows;
-      const selectedContact=opportunityContacts.find(contact=>contact.name===opportunityContactName);
-      const commercial:Row={id:editingCustomer?.id||`${active==="Quotations"?"QUO":"OPP"}-${String(286+targetRows.length).padStart(3,"0")}`,name:recordName,account:control("Client")||control("End User")||"Unassigned client",owner:control("Employee")||"Alex Morgan",value:control("TPS Offer")||control("Supplier Total")||control("Offer Value")||"To be valued",status:control("Client Inquiry Status")||control("Project Status")||"Bidding",date:control("Offer Date")||new Date().toLocaleDateString(),details:{contactName:opportunityContactName,contactMobile:selectedContact?.phone||"",contactEmail:selectedContact?.email||"",opportunityType:control("Opportunity Type"),documentType:control("Document Type")}};
-      const comment=opportunityComment.trim()||control("Comments");
-      let transferredProject:Row|null=null;
-      try{
-        const savedOpportunity:any=await upsertSupabaseRow("opportunities",{opportunity_code:commercial.id,project_name:commercial.name,client_id:await findClientId(commercial.account),contact_id:await findContactId(opportunityContactName,commercial.account),owner_name:commercial.owner,inquiry_status:commercial.status,status:"Active",document_type:control("Document Type")||"Inquiry",opportunity_type:control("Opportunity Type")||null,value:parseMoney(commercial.value),currency:control("Currency")||"SAR",last_call_date:toIsoDate(control("Last Call Date")),next_call_date:toIsoDate(control("Next Call Date")),scope_of_work:control("Scope Note")||control("Scope of Work")||null,notes:control("Notes")||null,close_date:toIsoDate(commercial.date)},"opportunity_code");
-        if(comment){const savedHistory:any=await insertSupabaseRow("opportunity_history",{opportunity_id:savedOpportunity.id,note:comment});const entry=`${new Date(savedHistory.created_at).toLocaleString()} — ${comment}`;setOpportunityHistory(history=>({...history,[commercial.id]:[...(history[commercial.id]||[]),entry]}));}
-        if(projectWon){
-          const projectCode=commercial.id.replace(/^(OPP|QUO)-/,"PRJ-");
-          const clientId=savedOpportunity.client_id||await findClientId(commercial.account);
-          const savedProject:any=await upsertSupabaseRow("projects",{project_code:projectCode,opportunity_id:savedOpportunity.id,client_id:clientId,name:commercial.name,project_type:control("Project Type")||control("Opportunity Type")||null,owner_name:control("Project Owner")||commercial.owner,progress:projectProgress,status:projectStatus,currency:control("Currency")||"SAR",value:parseMoney(commercial.value),start_date:toIsoDate(control("Start Date")),estimated_end_date:toIsoDate(control("Estimated End Date")),notes:control("Notes")||null,updated_at:new Date().toISOString()},"opportunity_id");
-          transferredProject={id:savedProject.project_code||projectCode,name:savedProject.name||commercial.name,account:commercial.account,owner:savedProject.owner_name||commercial.owner,value:`${savedProject.progress??projectProgress}%`,status:savedProject.status||projectStatus,date:savedProject.estimated_end_date||commercial.date};
+function VoiceTextarea({ defaultValue = "", onValueChange }: {
+    defaultValue?: string;
+    onValueChange?: (value: string) => void;
+}) {
+    const [value, setValue] = useState(defaultValue);
+    const [listening, setListening] = useState(false);
+    const [message, setMessage] = useState("");
+    const recognition = useRef<any>(null);
+    function toggleVoice() {
+        if (listening) {
+            recognition.current?.stop();
+            setListening(false);
+            return;
         }
-      }catch(error:any){announce(`Save failed: ${error.message}`);return}
-      const update=(rows:Row[])=>editingCustomer?rows.map(row=>row.id===editingCustomer.id?commercial:row):[commercial,...rows];
-      active==="Quotations"?setQuotationRows(update):setOpportunityRows(update);
-      if(transferredProject){setProjectRows(rows=>{const next=rows.some(row=>row.id===transferredProject!.id)?rows.map(row=>row.id===transferredProject!.id?transferredProject!:row):[transferredProject!,...rows];window.localStorage.setItem("tps-user-project-rows",JSON.stringify(next));return next;});}
-      setDrawer(false);setEditingCustomer(null);announce(transferredProject?"Opportunity transferred to the project list":comment?"Comment added to History with date and time":editingCustomer?"Commercial record updated":"New commercial record added");return;
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            setMessage("Voice typing is not supported in this browser.");
+            return;
+        }
+        const instance = new SpeechRecognition();
+        recognition.current = instance;
+        instance.lang = "en-US";
+        instance.continuous = true;
+        instance.interimResults = false;
+        instance.onresult = (event: any) => { let speech = ""; for (let i = event.resultIndex; i < event.results.length; i++)
+            speech += event.results[i][0].transcript; setValue(current => { const next = `${current}${current ? " " : ""}${speech}`; onValueChange?.(next); return next; }); };
+        instance.onerror = () => { setMessage("Microphone access was not available."); setListening(false); };
+        instance.onend = () => setListening(false);
+        instance.start();
+        setMessage("");
+        setListening(true);
     }
-    setDrawer(false);announce(`${editingCustomer?`${actionName} changes`:`New ${actionName}`} saved`);
-  }
-  const actionName = ({Customers:"client",Contacts:"contact",Opportunities:"opportunity",Quotations:"quotation",Projects:"project",Suppliers:"supplier",Activities:"activity",Tasks:"task",Employees:"employee"} as Record<string,string>)[active] || "record";
-  const accessFormName = ({Customers:"Client List",Contacts:"Contact Details",Opportunities:"Maintain Offers",Quotations:"Maintain Offers",Projects:"Project Status",Suppliers:"Supplier List",Activities:"Activity Details",Tasks:"Daily Tasks",Employees:"Employee Details"} as Record<string,string>)[active];
-  const activeForm = accessPages.find(page => page.name === accessFormName);
-  const drawerGroups: any = active === "Customers" && customerPage === "Opportunities" ? {map:()=><CustomerQuotationList customer={editingCustomer} contacts={contactListRows} announce={announce} employees={employeeRows} items={visibleOpportunityRows} setItems={setOpportunityRows} onWon={project=>setWonProjects(rows=>rows.some(row=>row.id===project.id)?rows:[project,...rows])} onOpenWorkspaceOpportunity={opportunity=>{setOpportunityClientContext(opportunity?.account||editingCustomer?.name||"");setActive("Opportunities");setEditingCustomer(opportunity);setOpportunitySection("Inquiry Information");setDrawer(true)}}/>} : active === "Customers" && customerPage === "Suppliers" ? {map:()=><CustomerSuppliers announce={announce}/>} : active === "Customers" && customerPage === "Projects" ? {map:()=><CustomerProjects customer={editingCustomer} announce={announce} wonProjects={wonProjects} workspaceProjects={projectRows}/>} : active === "Customers" && customerPage === "Activities" ? {map:()=><CustomerActivities announce={announce}/>} : active === "Customers" && customerPage === "Delivery" ? {map:()=><CustomerDeliveries announce={announce}/>} : active === "Customers" && customerPage === "Tasks" ? {map:()=><CustomerTasks announce={announce}/>} : active === "Customers" ? customerPages.find(page => page.name === customerPage)?.groups : active === "Projects" && editingCustomer ? {map:()=><CustomerProjects customer={customerRows.find(client=>client.name===editingCustomer.account)||null} announce={announce} wonProjects={wonProjects} workspaceProjects={projectRows} initialProject={editingCustomer}/>} : activeForm?.groups;
-
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("view") === "customer") {
-      setActive("Customers");
-      setEditingCustomer(records.Customers[0]||null);
-      setCustomerPage(new URLSearchParams(window.location.search).get("customerTab")==="quotation"?"Opportunities":"General");
-      setDrawer(true);
+    return <div className="voice-field"><textarea value={value} onChange={e => { setValue(e.target.value); onValueChange?.(e.target.value); }} placeholder="Type or use the microphone..."/><button type="button" className={listening ? "listening" : ""} onClick={toggleVoice} aria-label={listening ? "Stop voice typing" : "Start voice typing"}><span>MIC</span>{listening ? " Stop listening" : " Dictate"}</button>{message && <small>{message}</small>}</div>;
+}
+function toIsoDate(value: string) { if (!value)
+    return null; const date = new Date(value); return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10); }
+function parseMoney(value: string) { const number = Number(value.replace(/[^0-9.-]/g, "")); return Number.isFinite(number) ? number : null; }
+function humanizeFieldName(value: string) { return value.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/^./, letter => letter.toUpperCase()); }
+export default function Home() {
+    const [active, setActive] = useState("Overview");
+    const [query, setQuery] = useState("");
+    const [filter, setFilter] = useState("All statuses");
+    const [notice, setNotice] = useState("");
+    const [directoryTarget, setDirectoryTarget] = useState("Regions");
+    const [drawer, setDrawer] = useState(false);
+    const [customerPage, setCustomerPage] = useState("General");
+    const [opportunitySection, setOpportunitySection] = useState("Inquiry Information");
+    const [projectWon, setProjectWon] = useState(false);
+    const [projectTransferBusy, setProjectTransferBusy] = useState(false);
+    const [projectStatus, setProjectStatus] = useState("New");
+    const [projectProgress, setProjectProgress] = useState(15);
+    const [clientOrderEnabled, setClientOrderEnabled] = useState(false);
+    useEffect(() => { if (active === "Opportunities" && !['Inquiry Information', 'History', ...(projectWon ? ['Project'] : [])].includes(opportunitySection))
+        setOpportunitySection("Inquiry Information"); }, [active, opportunitySection, projectWon]);
+    useEffect(() => { if (!drawer)
+        setClientOrderEnabled(false); }, [drawer]);
+    const [contactRows, setContactRows] = useState([1]);
+    const [editingCustomer, setEditingCustomer] = useState<Row | null>(null);
+    const [wonProjects, setWonProjects] = useState<WonProject[]>([]);
+    const [employeeRows, setEmployeeRows] = useState<Row[]>(records.Employees);
+    const [contactListRows, setContactListRows] = useState<Row[]>(records.Contacts);
+    const [customerRows, setCustomerRows] = useState<Row[]>(records.Customers);
+    const [supplierRows, setSupplierRows] = useState<Row[]>(records.Suppliers);
+    const supplierNames = supplierRows.map(supplier => supplier.name);
+    const [taskRows, setTaskRows] = useState<Row[]>(records.Tasks);
+    const [projectRows, setProjectRows] = useState<Row[]>(records.Projects);
+    useEffect(() => { try {
+        const saved = window.localStorage.getItem("tps-user-project-rows");
+        if (saved)
+            setProjectRows(JSON.parse(saved));
     }
-  }, []);
-
-  useEffect(() => {
-    if (editingCustomer) setContactRows([Number(editingCustomer.id.replace(/\D/g,""))]);
-  }, [editingCustomer]);
-
-  useEffect(() => {
-    if (!drawer) return;
-    const form=document.querySelector(".access-drawer form") as HTMLFormElement|null;
-    if(!form) return;
-    const employeeLabel=Array.from(form.querySelectorAll("label")).find(label=>label.childNodes[0]?.textContent?.trim()==="Employee");const employeeSelect=employeeLabel?.querySelector("select");if(employeeSelect&&!employeeSelect.querySelector('option[value="__manage_employees"]')){const option=document.createElement("option");option.value="__manage_employees";option.textContent="Add / modify employees...";employeeSelect.appendChild(option)}
-    const documentTypeLabel=Array.from(form.querySelectorAll("label")).find(label=>label.childNodes[0]?.textContent?.trim()==="Document Type");const documentTypeSelect=documentTypeLabel?.querySelector("select");if(documentTypeSelect&&!documentTypeSelect.querySelector('option[value="__manage_document_types"]')){const option=document.createElement("option");option.value="__manage_document_types";option.textContent="Add / modify document types...";documentTypeSelect.appendChild(option)}
-    const opportunityTypeLabel=Array.from(form.querySelectorAll("label")).find(label=>label.childNodes[0]?.textContent?.trim()==="Opportunity Type");const opportunityTypeSelect=opportunityTypeLabel?.querySelector("select");if(opportunityTypeSelect&&!opportunityTypeSelect.querySelector('option[value="__manage_opportunity_types"]')){const option=document.createElement("option");option.value="__manage_opportunity_types";option.textContent="Add / modify opportunity types...";opportunityTypeSelect.appendChild(option)}
-    const projectStatusLabel=Array.from(form.querySelectorAll("label")).find(label=>label.childNodes[0]?.textContent?.trim()==="Client Project Status");const projectStatusSelect=projectStatusLabel?.querySelector("select");if(projectStatusSelect&&!projectStatusSelect.querySelector('option[value="__manage_project_statuses"]')){const option=document.createElement("option");option.value="__manage_project_statuses";option.textContent="Add / modify project statuses...";projectStatusSelect.appendChild(option)}
-    const currencySelects=Array.from(form.querySelectorAll("label")).filter(label=>label.childNodes[0]?.textContent?.trim()==="Currency").map(label=>label.querySelector("select")).filter((select):select is HTMLSelectElement=>Boolean(select));currencySelects.forEach(select=>{if(!select.querySelector('option[value="__manage_currencies"]')){const option=document.createElement("option");option.value="__manage_currencies";option.textContent="Add / modify currencies...";select.appendChild(option)}});
-    const labels=Array.from(form.querySelectorAll("label"));
-    const projectStartInput=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Start Date")?.querySelector("input") as HTMLInputElement|null;
-    if(projectStartInput){projectStartInput.setAttribute("type","date");projectStartInput.removeAttribute("placeholder");if(projectStartInput.value&&!/^\d{4}-\d{2}-\d{2}$/.test(projectStartInput.value))projectStartInput.value="";projectStartInput.addEventListener("click",()=>projectStartInput.showPicker?.())}
-    const projectEndInput=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Estimated End Date")?.querySelector("input") as HTMLInputElement|null;
-    if(projectEndInput){projectEndInput.setAttribute("type","date");projectEndInput.removeAttribute("placeholder");if(projectEndInput.value&&!/^\d{4}-\d{2}-\d{2}$/.test(projectEndInput.value))projectEndInput.value="";projectEndInput.addEventListener("click",()=>projectEndInput.showPicker?.())}
-    if(active==="Projects"&&projectStartInput&&projectEndInput&&!labels.some(label=>label.childNodes[0]?.textContent?.trim()==="Duration (Days)")){
-      const durationLabel=document.createElement("label");durationLabel.append("Duration (Days)");const durationInput=document.createElement("input");durationInput.readOnly=true;durationInput.placeholder="Calculated automatically";durationLabel.appendChild(durationInput);const projectGrid=projectEndInput.closest(".drawer-field-grid");const currencyLabel=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Currency");projectGrid?.insertBefore(durationLabel,currencyLabel?.parentElement===projectGrid?currencyLabel:null);
-      const calculateDuration=()=>{projectEndInput.min=projectStartInput.value;if(!projectStartInput.value||!projectEndInput.value){durationInput.value="";return;}const days=Math.ceil((new Date(`${projectEndInput.value}T00:00:00`).getTime()-new Date(`${projectStartInput.value}T00:00:00`).getTime())/86400000);durationInput.value=String(Math.max(0,days))};
-      projectStartInput.addEventListener("change",calculateDuration);projectEndInput.addEventListener("change",calculateDuration);calculateDuration();
+    catch { } }, []);
+    const [equipmentValues, setEquipmentValues] = useState(["Pumps", "Valves", "Control Panels", "Instrumentation", "Water Treatment Package", "Electrical Equipment"]);
+    useEffect(() => { try {
+        const saved = window.localStorage.getItem("tps-equipment-values");
+        if (saved)
+            setEquipmentValues(JSON.parse(saved));
     }
-    const projectTypeLabel=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Project Type");
-    const projectTypeInput=projectTypeLabel?.querySelector("input");
-    if(active==="Projects"&&projectTypeLabel&&projectTypeInput){const select=document.createElement("select");select.replaceChildren(new Option("Select...",""),...projectTypeValues.map(value=>new Option(value,value)),new Option("Add / edit project types...","__manage_project_types"));projectTypeInput.replaceWith(select)}
-    const clientSelect=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Client")?.querySelector("select") as HTMLSelectElement|null;
-    const contactLabel=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Contact Person");
-    const contactInput=contactLabel?.querySelector("input") as HTMLInputElement|null;
-    const contactSelect=contactInput?document.createElement("select"):null;
-    const endUserLabel=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="End User");
-    const endUserInput=endUserLabel?.querySelector("input") as HTMLInputElement|null;
-    const endUserSelect=endUserInput?document.createElement("select"):null;
-    const supplierLabel=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Principle / Supplier Name");
-    const supplierInput=supplierLabel?.querySelector("input") as HTMLInputElement|null;
-    const supplierSelect=supplierInput?document.createElement("select"):null;
-    const equipmentLabel=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Equipment");
-    const equipmentInput=equipmentLabel?.querySelector("input") as HTMLInputElement|null;
-    const equipmentSelect=equipmentInput?document.createElement("select"):null;
-    const materialLabel=labels.find(label=>label.childNodes[0]?.textContent?.trim()==="Supplier Scope");
-    const materialInput=materialLabel?.querySelector("textarea") as HTMLTextAreaElement|null;
-    const materialSelect=materialInput?document.createElement("select"):null;
-    const relatedInput=(name:string)=>labels.find(label=>label.childNodes[0]?.textContent?.trim()===name)?.querySelector("input") as HTMLInputElement|null;
-    const telephoneInput=relatedInput("Telephone"),regionInput=relatedInput("Region"),locationInput=relatedInput("Location");
-    const clearContactDetails=()=>{if(telephoneInput)telephoneInput.value="";if(regionInput)regionInput.value="";if(locationInput)locationInput.value=""};
-    const refreshContacts=()=>{if(!contactSelect)return;const clientName=clientSelect?.value||editingCustomer?.account||"";contactSelect.replaceChildren(new Option("Select contact person...",""),...clientContactDetails.filter(contact=>contact.client===clientName).map(contact=>new Option(contact.name,contact.name)),new Option("Add / modify contacts...","__manage_contacts"));contactInput!.value="";clearContactDetails()};
-    if(contactInput&&contactSelect){contactInput.hidden=true;contactSelect.setAttribute("aria-label","Contact Person");contactInput.insertAdjacentElement("afterend",contactSelect);refreshContacts()}
-    if(endUserInput&&endUserSelect){endUserInput.hidden=true;endUserSelect.setAttribute("aria-label","End User");endUserSelect.replaceChildren(new Option("Select end user...",""),...['Private','NWC','Saudi Water Authority','Saudi Aramco','Saudi Electricity Company'].map(value=>new Option(value,value)),new Option("Add / modify end users...","__manage_end_users"));endUserSelect.value=endUserInput.value;endUserInput.insertAdjacentElement("afterend",endUserSelect)}
-    if(supplierInput&&supplierSelect){supplierInput.hidden=true;supplierSelect.setAttribute("aria-label","Principle / Supplier Name");supplierSelect.replaceChildren(new Option("Select supplier...",""),...supplierRows.map(supplier=>new Option(supplier.name,supplier.name)),new Option("Add / modify suppliers...","__manage_suppliers"));supplierSelect.value=supplierInput.value;supplierInput.insertAdjacentElement("afterend",supplierSelect)}
-    if(equipmentInput&&equipmentSelect){equipmentInput.hidden=true;equipmentSelect.setAttribute("aria-label","Equipment");equipmentSelect.replaceChildren(new Option("Select equipment...",""),...['Pumps','Valves','Control Panels','Instrumentation','Water Treatment Package','Electrical Equipment'].map(value=>new Option(value,value)),new Option("Add / modify equipment...","__manage_equipment"));equipmentSelect.value=equipmentInput.value;equipmentInput.insertAdjacentElement("afterend",equipmentSelect)}
-    if(materialInput&&materialSelect){materialInput.hidden=true;materialSelect.multiple=true;materialSelect.size=7;materialSelect.className="supplier-material-list";materialSelect.setAttribute("aria-label","Supplier Materials");materialSelect.replaceChildren(...['Pumps','Valves','Control Panels','Instrumentation','Water Treatment Packages','Electrical Equipment'].map(value=>new Option(value,value)),new Option("Add / modify materials...","__manage_materials"));materialInput.insertAdjacentElement("afterend",materialSelect)}
-    const handleFormChange=(event:Event)=>{const control=event.target as HTMLInputElement|HTMLSelectElement;if(control===clientSelect){refreshContacts();return;}if(control===contactSelect){if(control.value==="__manage_contacts"){const client=customerRows.find(item=>item.name===clientSelect?.value);if(client){setActive("Customers");setEditingCustomer(client);setCustomerPage("Contacts");setDrawer(true)}else announce("Choose a client before adding or modifying contacts");return;}if(contactInput)contactInput.value=control.value;const contact=clientContactDetails.find(item=>item.client===clientSelect?.value&&item.name===control.value);if(telephoneInput)telephoneInput.value=contact?.phone||"";if(regionInput)regionInput.value=contact?.region||"";if(locationInput)locationInput.value=contact?.location||"";return;}if(control instanceof HTMLSelectElement&&control.value==="__manage_clients"){setDrawer(false);setEditingCustomer(null);setActive("Customers");setQuery("");setFilter("All statuses");return;}if(control instanceof HTMLSelectElement&&control.value==="__manage_employees"){setDrawer(false);setEditingCustomer(null);setActive("Employees");setQuery("");setFilter("All statuses");return;}if(control instanceof HTMLSelectElement&&control.value==="__manage_document_types"){setDirectoryTarget("Document types");setDrawer(false);setEditingCustomer(null);setActive("Directory");setQuery("");setFilter("All statuses");return;}if(control instanceof HTMLSelectElement&&control.value==="__manage_opportunity_types"){setDirectoryTarget("Opportunity types");setDrawer(false);setEditingCustomer(null);setActive("Directory");setQuery("");setFilter("All statuses");return;}if(control instanceof HTMLSelectElement&&control.value==="__manage_project_types"){setDirectoryTarget("Project types");setDrawer(false);setEditingCustomer(null);setActive("Directory");setQuery("");setFilter("All statuses");return;}if(!(control instanceof HTMLInputElement)||control.type!=="date"||control.closest("label")?.childNodes[0]?.textContent?.trim()!=="Last Call Date"||!control.value)return;const nextDate=new Date(`${control.value}T00:00:00`);nextDate.setDate(nextDate.getDate()+7);const nextLabel=Array.from(form.querySelectorAll("label")).find(label=>label.childNodes[0]?.textContent?.trim()==="Next Call Date");const nextInput=nextLabel?.querySelector('input[type="date"]') as HTMLInputElement|null;if(nextInput)nextInput.value=nextDate.toISOString().slice(0,10)};
-    const handleEndUserChange=()=>{if(!endUserSelect)return;if(endUserSelect.value==="__manage_end_users"){setDrawer(false);setEditingCustomer(null);setActive("Directory");setQuery("");setFilter("All statuses");return;}if(endUserInput)endUserInput.value=endUserSelect.value};
-    const handleProjectStatusChange=()=>{if(projectStatusSelect?.value!=="__manage_project_statuses")return;setDrawer(false);setEditingCustomer(null);setActive("Directory");setQuery("");setFilter("All statuses")};
-    const handleSupplierChange=()=>{if(!supplierSelect)return;if(supplierSelect.value==="__manage_suppliers"){setDrawer(false);setEditingCustomer(null);setActive("Suppliers");setQuery("");setFilter("All statuses");return;}if(supplierInput)supplierInput.value=supplierSelect.value};
-    const handleEquipmentChange=()=>{if(!equipmentSelect)return;if(equipmentSelect.value==="__manage_equipment"){setDirectoryTarget("Equipment");setDrawer(false);setEditingCustomer(null);setActive("Directory");setQuery("");setFilter("All statuses");return;}if(equipmentInput)equipmentInput.value=equipmentSelect.value};
-    const handleCurrencyChange=(event:Event)=>{const select=event.target as HTMLSelectElement;if(select.value!=="__manage_currencies")return;setDrawer(false);setEditingCustomer(null);setActive("Directory");setQuery("");setFilter("All statuses")};
-    const handleMaterialChange=()=>{if(!materialSelect)return;if(Array.from(materialSelect.selectedOptions).some(option=>option.value==="__manage_materials")){setDirectoryTarget("Equipment");setDrawer(false);setEditingCustomer(null);setActive("Directory");setQuery("");setFilter("All statuses");return;}if(materialInput)materialInput.value=Array.from(materialSelect.selectedOptions).map(option=>option.value).join(", ")};
-    form.addEventListener("change",handleFormChange);
-    endUserSelect?.addEventListener("change",handleEndUserChange);
-    projectStatusSelect?.addEventListener("change",handleProjectStatusChange);
-    supplierSelect?.addEventListener("change",handleSupplierChange);
-    equipmentSelect?.addEventListener("change",handleEquipmentChange);
-    currencySelects.forEach(select=>select.addEventListener("change",handleCurrencyChange));
-    materialSelect?.addEventListener("change",handleMaterialChange);
-    return()=>{form.removeEventListener("change",handleFormChange);endUserSelect?.removeEventListener("change",handleEndUserChange);projectStatusSelect?.removeEventListener("change",handleProjectStatusChange);supplierSelect?.removeEventListener("change",handleSupplierChange);equipmentSelect?.removeEventListener("change",handleEquipmentChange);currencySelects.forEach(select=>select.removeEventListener("change",handleCurrencyChange));materialSelect?.removeEventListener("change",handleMaterialChange);contactSelect?.remove();endUserSelect?.remove();supplierSelect?.remove();equipmentSelect?.remove();materialSelect?.remove();if(contactInput)contactInput.hidden=false;if(endUserInput)endUserInput.hidden=false;if(supplierInput)supplierInput.hidden=false;if(equipmentInput)equipmentInput.hidden=false;if(materialInput)materialInput.hidden=false};
-  },[drawer,active,customerRows,projectTypeValues,supplierRows]);
-
-  if(!sessionReady)return <main className="login-screen"><p>Connecting securely...</p></main>;
-  if(!signedIn)return <><LoginScreen onError={setAuthError}/>{authError&&<div className="auth-error" role="alert">{authError}</div>}</>;
-  return <main className="app-shell">
+    catch { } }, []);
+    const [projectTypeValues, setProjectTypeValues] = useState(["Supply", "Service"]);
+    useEffect(() => { try {
+        const saved = window.localStorage.getItem("tps-project-type-values");
+        if (saved)
+            setProjectTypeValues(JSON.parse(saved));
+    }
+    catch { } }, []);
+    const [opportunityRows, setOpportunityRows] = useState<Row[]>(records.Opportunities);
+    const visibleOpportunityRows = useMemo(() => opportunityRows.filter(row => row.status.trim().toLowerCase() !== "won"), [opportunityRows]);
+    const [opportunityHistory, setOpportunityHistory] = useState<Record<string, string[]>>({});
+    const [opportunityComment, setOpportunityComment] = useState("");
+    const [opportunityClientContext, setOpportunityClientContext] = useState("");
+    const [opportunityContactName, setOpportunityContactName] = useState("");
+    const opportunityClientName = opportunityClientContext || editingCustomer?.account || "";
+    const opportunityContacts = useMemo(() => {
+        const linked = [...contactListRows.filter(contact => contact.account === opportunityClientName), ...clientContactDetails.filter(contact => contact.client === opportunityClientName).map((contact, index) => ({ id: `linked-${index}`, name: contact.name, account: contact.client, owner: "", value: "", status: "Active", date: "", phone: contact.phone, email: contact.email, region: contact.region, location: contact.location }))];
+        const unique = linked.filter((contact, index, all) => all.findIndex(item => item.name === contact.name) === index);
+        return opportunityClientName ? [...unique, { id: "__add_contact", name: "+ Add new contact...", account: opportunityClientName, owner: "", value: "", status: "", date: "", phone: "", email: "", region: "", location: "" }] : unique;
+    }, [contactListRows, opportunityClientName]);
+    const opportunityContact = opportunityContacts.find(contact => contact.name === opportunityContactName);
+    useEffect(() => {
+        if (opportunityContactName !== "+ Add new contact...")
+            return;
+        const client = customerRows.find(item => item.name === opportunityClientName);
+        setOpportunityContactName("");
+        if (!client) {
+            announce("Choose a client before adding a contact");
+            return;
+        }
+        setActive("Customers");
+        setEditingCustomer(client);
+        setCustomerPage("Contacts");
+        setContactRows([Number(client.id.replace(/\D/g, ""))]);
+        setDrawer(true);
+    }, [opportunityContactName, opportunityClientName, customerRows]);
+    useEffect(() => { setOpportunityComment(""); setProjectWon(false); setProjectStatus("New"); setProjectProgress(15); }, [editingCustomer?.id]);
+    async function findOpportunityId(code: string) { if (!supabase)
+        return null; const { data, error } = await supabase.from("opportunities").select("id").eq("opportunity_code", code).maybeSingle(); if (error)
+        throw error; return data?.id || null; }
+    useEffect(() => {
+        const opportunityCode = editingCustomer?.id;
+        if (!supabase || !opportunityCode || (!opportunityCode.startsWith("OPP-") && !opportunityCode.startsWith("QUO-")))
+            return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const opportunityId = await findOpportunityId(opportunityCode);
+                if (!opportunityId) {
+                    if (!cancelled)
+                        setOpportunityHistory(history => ({ ...history, [opportunityCode]: [] }));
+                    return;
+                }
+                const { data, error } = await supabase.from("opportunity_history").select("note,created_at").eq("opportunity_id", opportunityId).order("created_at", { ascending: true });
+                if (error)
+                    throw error;
+                if (!cancelled)
+                    setOpportunityHistory(history => ({ ...history, [opportunityCode]: (data || []).map((item: any) => `${new Date(item.created_at).toLocaleString()} — ${item.note}`) }));
+            }
+            catch (error: any) {
+                if (!cancelled)
+                    announce(`History load failed: ${error.message}`);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [editingCustomer?.id]);
+    async function addOpportunityComment() { const comment = opportunityComment.trim(); if (!comment) {
+        announce("Enter a comment first");
+        return;
+    } if (!editingCustomer?.id) {
+        announce("Save the opportunity before adding comments to History");
+        return;
+    } try {
+        const opportunityId = await findOpportunityId(editingCustomer.id);
+        if (!opportunityId)
+            throw new Error("Save the opportunity first");
+        const saved: any = await insertSupabaseRow("opportunity_history", { opportunity_id: opportunityId, note: comment });
+        const entry = `${new Date(saved.created_at).toLocaleString()} — ${comment}`;
+        setOpportunityHistory(history => ({ ...history, [editingCustomer.id]: [...(history[editingCustomer.id] || []), entry] }));
+        setOpportunityComment("");
+        announce("Comment saved to History with date and time");
+    }
+    catch (error: any) {
+        announce(`History save failed: ${error.message}`);
+    } }
+    const [customerOpportunityRows, setCustomerOpportunityRows] = useState<CustomerOpportunity[]>([]);
+    const [quotationRows, setQuotationRows] = useState<Row[]>(records.Quotations);
+    useEffect(() => { Promise.all([readSupabaseTable<any>("clients"), readSupabaseTable<any>("contacts"), readSupabaseTable<any>("suppliers"), readSupabaseTable<any>("opportunities"), readSupabaseTable<any>("projects"), readSupabaseTable<any>("employees")]).then(([clients, contacts, suppliers, opportunities, projects, employees]) => { const clientName = new Map(clients.map((item: any) => [item.id, item.name])); const contactById = new Map(contacts.map((item: any) => [item.id, item])); setCustomerRows(clients.map((item: any) => ({ id: item.client_code, name: item.name, account: item.phone || "No primary contact", owner: item.owner_name || "Unassigned", value: "$0", status: item.status || "Active", date: new Date(item.updated_at || item.created_at).toLocaleDateString(), phone: item.phone || "", email: item.email || "", region: item.region || "", location: item.location || "" }))); setContactListRows(contacts.map((item: any) => ({ id: item.contact_code, name: item.full_name, account: clientName.get(item.client_id) || "Unassigned client", owner: item.department || "", value: item.job_title || "", status: item.role || "Active", date: new Date(item.updated_at || item.created_at).toLocaleDateString(), phone: item.mobile_phone || "", email: item.email || "", region: item.region || "", location: item.location || "", details: { databaseId: item.id } }))); setSupplierRows(suppliers.map((item: any) => ({ id: item.supplier_code, name: item.name, account: "Supplier", owner: item.region || "", value: item.scope || "", status: item.status || "Active", date: new Date(item.updated_at || item.created_at).toLocaleDateString(), phone: item.phone || "", email: item.email || "", region: item.region || "" }))); setOpportunityRows(opportunities.map((item: any) => { const contact: any = contactById.get(item.contact_id); return { id: item.opportunity_code, name: item.project_name, account: clientName.get(item.client_id) || "Unassigned client", owner: item.owner_name || "Unassigned", value: item.value == null ? "To be valued" : `${item.currency || "SAR"} ${item.value}`, status: item.inquiry_status || item.status || "Inquiry", date: item.close_date || item.next_call_date || "", details: { contactName: contact?.full_name || "", contactMobile: contact?.mobile_phone || "", contactEmail: contact?.email || "", opportunityType: item.opportunity_type || "", documentType: item.document_type || "" } }; }));
+        const opportunityById = new Map(opportunities.map((item: any) => [item.id, item]));
+        setProjectRows(projects.map((item: any) => {
+            const sourceOpportunity: any = opportunityById.get(item.opportunity_id);
+            const sourceContact: any = sourceOpportunity ? contactById.get(sourceOpportunity.contact_id) : null;
+            const snapshot = item.opportunity_snapshot?.opportunity;
+            const transferredDetails = snapshot?.details || (sourceOpportunity ? {
+                databaseId: sourceOpportunity.id,
+                contactName: sourceContact?.full_name || "",
+                contactMobile: sourceContact?.mobile_phone || "",
+                contactEmail: sourceContact?.email || "",
+                contactRegion: sourceContact?.region || "",
+                contactLocation: sourceContact?.location || "",
+                opportunityType: sourceOpportunity.opportunity_type || "",
+                documentType: sourceOpportunity.document_type || "",
+                inquiryStatus: sourceOpportunity.inquiry_status || sourceOpportunity.status || "",
+                currency: sourceOpportunity.currency || "SAR",
+                closeDate: sourceOpportunity.close_date || "",
+                notes: sourceOpportunity.notes || "",
+                sourceRecord: sourceOpportunity,
+                projectWon: "true",
+            } : {});
+            return {
+                id: item.project_code,
+                name: item.name,
+                account: clientName.get(item.client_id) || snapshot?.account || "Unassigned client",
+                owner: item.owner_name || snapshot?.owner || "Unassigned",
+                value: `${item.progress || 0}%`,
+                status: item.status || "New",
+                date: item.estimated_end_date || "",
+                phone: snapshot?.phone || sourceContact?.mobile_phone || "",
+                email: snapshot?.email || sourceContact?.email || "",
+                region: snapshot?.region || sourceContact?.region || "",
+                location: snapshot?.location || sourceContact?.location || "",
+                details: {
+                    ...transferredDetails,
+                    opportunityId: snapshot?.id || sourceOpportunity?.opportunity_code || "",
+                    opportunitySnapshot: item.opportunity_snapshot || (sourceOpportunity ? { opportunity: sourceOpportunity } : {}),
+                },
+            };
+        }));
+        setEmployeeRows(employees.map((item: any) => ({ id: item.employee_code, name: `${item.first_name} ${item.last_name}`.trim(), account: item.company || TPS_COMPANY_NAME, owner: item.department || "Staff", value: item.job_title || "Employee", status: item.status || "Active", date: new Date(item.updated_at || item.created_at).toLocaleDateString(), phone: item.mobile_phone || "", email: item.email || "", region: item.country_region || "", location: item.city || "", details: { businessPhone: item.business_phone || "", homePhone: item.home_phone || "", faxNumber: item.fax_number || "", webPage: item.web_page || "", street: item.street || "", stateProvince: item.state_province || "", postalCode: item.postal_code || "" } }))); }).catch((error: any) => announce(`Database read failed: ${error.message}`)); }, []);
+    async function findClientId(name: string, clientCodeOverride?: string) {
+        if (!supabase || !name || name === "Unassigned client")
+            return null;
+        const clientCode = clientCodeOverride || customerRows.find(client => client.name === name)?.id;
+        let request = supabase.from("clients").select("id");
+        request = clientCode ? request.eq("client_code", clientCode) : request.eq("name", name);
+        const { data, error } = await request.limit(1).maybeSingle();
+        if (error)
+            throw error;
+        return data?.id || null;
+    }
+    async function findContactId(name: string, clientName: string) {
+        if (!supabase || !name)
+            return null;
+        const localContact = contactListRows.find(contact => contact.name === name && contact.account === clientName);
+        if (localContact?.details?.databaseId)
+            return localContact.details.databaseId;
+        const clientId = await findClientId(clientName);
+        let request = supabase.from("contacts").select("id").eq("full_name", name);
+        if (clientId)
+            request = request.eq("client_id", clientId);
+        const { data, error } = await request.maybeSingle();
+        if (error)
+            throw error;
+        return data?.id || null;
+    }
+    function navigate(label: string) { setActive(label); setQuery(""); setFilter("All statuses"); setDrawer(false); }
+    function announce(message: string) { setNotice(message); window.setTimeout(() => setNotice(""), 2200); }
+    async function transferOpportunityToProject() {
+        if (projectTransferBusy)
+            return;
+        if (!editingCustomer?.id) {
+            announce("Save the opportunity before marking it Won");
+            return;
+        }
+        setProjectTransferBusy(true);
+        try {
+            const account = opportunityClientName || editingCustomer.account;
+            const selectedContact = opportunityContacts.find(contact => contact.name === opportunityContactName);
+            const completeOpportunity: Row = {
+                ...editingCustomer,
+                account,
+                phone: selectedContact?.phone || editingCustomer.phone || "",
+                email: selectedContact?.email || editingCustomer.email || "",
+                region: selectedContact?.region || editingCustomer.region || "",
+                location: selectedContact?.location || editingCustomer.location || "",
+                status: "Won",
+                details: {
+                    ...(editingCustomer.details || {}),
+                    contactName: opportunityContactName || editingCustomer.details?.contactName || "",
+                    contactMobile: selectedContact?.phone || editingCustomer.details?.contactMobile || "",
+                    contactEmail: selectedContact?.email || editingCustomer.details?.contactEmail || "",
+                    contactRegion: selectedContact?.region || editingCustomer.details?.contactRegion || "",
+                    contactLocation: selectedContact?.location || editingCustomer.details?.contactLocation || "",
+                    projectWon: "true"
+                }
+            };
+            const snapshot = { opportunity: completeOpportunity, history: opportunityHistory[editingCustomer.id] || [], transferredAt: new Date().toISOString() };
+            const clientId = await findClientId(account);
+            const savedOpportunity: any = await upsertSupabaseRow("opportunities", {
+                opportunity_code: completeOpportunity.id, project_name: completeOpportunity.name, client_id: clientId,
+                contact_id: await findContactId(opportunityContactName, account), owner_name: editingCustomer.owner,
+                inquiry_status: "Won", status: "Active", document_type: completeOpportunity.details?.documentType || "Offer",
+                opportunity_type: completeOpportunity.details?.opportunityType || null, value: parseMoney(completeOpportunity.value),
+                currency: completeOpportunity.details?.currency || "SAR", close_date: toIsoDate(completeOpportunity.date)
+            }, "opportunity_code");
+            const projectCode = editingCustomer.id.replace(/^(OPP|QUO)-/, "PRJ-");
+            const savedProject: any = await upsertSupabaseRow("projects", {
+                project_code: projectCode, opportunity_id: savedOpportunity.id, client_id: savedOpportunity.client_id || clientId,
+                name: completeOpportunity.name, project_type: completeOpportunity.details?.opportunityType || null,
+                owner_name: completeOpportunity.owner, progress: projectProgress, status: projectStatus,
+                currency: completeOpportunity.details?.currency || "SAR", value: parseMoney(completeOpportunity.value),
+                estimated_end_date: toIsoDate(completeOpportunity.date), updated_at: new Date().toISOString()
+            }, "opportunity_id");
+            const transferredProject: Row = { id: savedProject.project_code || projectCode, name: savedProject.name || completeOpportunity.name, account, owner: savedProject.owner_name || completeOpportunity.owner, value: `${savedProject.progress ?? projectProgress}%`, status: savedProject.status || projectStatus, date: savedProject.estimated_end_date || completeOpportunity.date, phone: completeOpportunity.phone, email: completeOpportunity.email, region: completeOpportunity.region, location: completeOpportunity.location, details: { ...(completeOpportunity.details || {}), opportunityId: completeOpportunity.id, opportunitySnapshot: snapshot } };
+            setProjectRows(rows => { const next = rows.some(row => row.id === transferredProject.id) ? rows.map(row => row.id === transferredProject.id ? transferredProject : row) : [transferredProject, ...rows]; window.localStorage.setItem("tps-user-project-rows", JSON.stringify(next)); return next; });
+            const wonOpportunity = completeOpportunity;
+            setEditingCustomer(wonOpportunity);
+            setOpportunityRows(rows => rows.filter(row => row.id !== wonOpportunity.id));
+            setProjectWon(true);
+            setOpportunitySection("Project");
+            announce("Opportunity marked Won and moved to the project list");
+        }
+        catch (error: any) {
+            setProjectWon(false);
+            announce(`Transfer failed: ${error.message}`);
+        }
+        finally {
+            setProjectTransferBusy(false);
+        }
+    }
+    async function saveDrawer(e: any) {
+        e.preventDefault();
+        const form = e.currentTarget as HTMLFormElement;
+        const control = (label: string) => { const fieldLabel = Array.from(form.querySelectorAll("label")).find(item => item.childNodes[0]?.textContent?.trim() === label); return (fieldLabel?.querySelector("input,select,textarea") as HTMLInputElement | null)?.value.trim() || ""; };
+        if (active === "Contacts" || (active === "Customers" && customerPage === "Contacts")) {
+            const first = control("First Name"), last = control("Last Name"), fullName = `${first} ${last}`.trim();
+            if (!fullName) {
+                announce("Contact name is required");
+                return;
+            }
+            const clientName = active === "Customers" ? editingCustomer?.name || "" : control("Company");
+            try {
+                const contact: Row = { id: active === "Contacts" && editingCustomer?.id ? editingCustomer.id : `CON-${Date.now().toString().slice(-6)}`, name: fullName, account: clientName, owner: control("Department"), value: control("Job Title"), status: control("Role") || "Primary", date: new Date().toLocaleDateString(), phone: control("Mobile Phone") || control("Business Phone"), email: control("E-mail Address"), region: control("Country / Region"), location: control("Location") };
+                await upsertSupabaseRow("contacts", { contact_code: contact.id, client_id: await findClientId(clientName, active === "Customers" ? editingCustomer?.id : undefined), full_name: contact.name, job_title: contact.value || null, department: contact.owner || null, mobile_phone: contact.phone || null, email: contact.email || null, region: contact.region || null, location: contact.location || null, role: contact.status }, "contact_code");
+                setContactListRows(rows => rows.some(row => row.id === contact.id) ? rows.map(row => row.id === contact.id ? contact : row) : [contact, ...rows]);
+                setCustomerPage("Contacts");
+                announce("Contact saved to the database");
+            }
+            catch (error: any) {
+                announce(`Save failed: ${error.message}`);
+            }
+            return;
+        }
+        if (active === "Suppliers") {
+            const name = control("Supplier Name");
+            if (!name) {
+                announce("Supplier Name is required");
+                return;
+            }
+            const supplier: Row = { id: control("Supplier ID") || editingCustomer?.id || `SUP-${Date.now().toString().slice(-6)}`, name, account: "Supplier", owner: control("Country / Region") || control("Region"), value: control("Supplier Scope") || control("Scope of Supply / What they sell"), status: control("Status") || "Active", date: new Date().toLocaleDateString(), phone: control("Phone") || control("Mobile Phone"), email: control("Email"), region: control("Country / Region") || control("Region") };
+            try {
+                await upsertSupabaseRow("suppliers", { supplier_code: supplier.id, name: supplier.name, account_number: control("Account Number") || null, scope: supplier.value || null, phone: supplier.phone || null, email: supplier.email || null, region: supplier.region || null, status: supplier.status }, "supplier_code");
+                setSupplierRows(rows => rows.some(row => row.id === supplier.id) ? rows.map(row => row.id === supplier.id ? supplier : row) : [supplier, ...rows]);
+                setDrawer(false);
+                setEditingCustomer(null);
+                announce("Supplier saved to the database");
+            }
+            catch (error: any) {
+                announce(`Save failed: ${error.message}`);
+            }
+            return;
+        }
+        if (active === "Customers") {
+            if (customerPage !== "General") {
+                setDrawer(false);
+                announce("Client changes saved");
+                return;
+            }
+            const customerName = control("Client Name");
+            if (!customerName) {
+                announce("Client Name is required");
+                return;
+            }
+            const clientCode = editingCustomer?.id || control("Client Number") || `CUS-${String(1050 + customerRows.length).padStart(4, "0")}`;
+            let customer: Row;
+            try {
+                const saved = await upsertSupabaseRow("clients", { client_code: clientCode, name: customerName, name_ar: control("Client Name - Arabic") || null, client_type: control("Client Type") || null, phone: control("Phone") || null, email: control("Email") || null, region: control("Country / Region") || null, location: control("City") || null, owner_name: control("Handled by") || editingCustomer?.owner || "Unassigned", status: editingCustomer?.status || "Active", updated_at: new Date().toISOString() }, "client_code");
+                customer = clientRowFromDatabase(saved);
+            }
+            catch (error: any) {
+                announce(`Save failed: ${error.message}`);
+                return;
+            }
+            setCustomerRows(rows => rows.some(row => row.id === customer.id) ? rows.map(row => row.id === customer.id ? customer : row) : [customer, ...rows]);
+            setDrawer(false);
+            setEditingCustomer(null);
+            announce(editingCustomer ? "Client information saved" : "New client added to the client list");
+            return;
+        }
+        if (active === "Employees") {
+            const firstName = control("First Name"), lastName = control("Last Name");
+            if (!firstName || !lastName) {
+                announce("First name and last name are required");
+                return;
+            }
+            const employee: Row = { id: control("Employee ID") || editingCustomer?.id || `EMP-${String(employeeRows.length + 1).padStart(3, "0")}`, name: `${firstName} ${lastName}`, account: control("Company") || TPS_COMPANY_NAME, owner: control("Department") || "Staff", value: control("Job Title") || "Employee", status: "Active", date: new Date().toLocaleDateString(), phone: control("Mobile Phone"), email: control("E-mail Address"), region: control("Country / Region"), location: control("City"), details: { businessPhone: control("Business Phone"), homePhone: control("Home Phone"), faxNumber: control("Fax Number"), webPage: control("Web Page"), street: control("Street"), stateProvince: control("State / Province"), postalCode: control("ZIP / Postal Code") } };
+            try {
+                await upsertSupabaseRow("employees", { employee_code: employee.id, first_name: firstName, last_name: lastName, company: employee.account, job_title: employee.value || null, department: employee.owner || null, email: employee.email || null, business_phone: employee.details?.businessPhone || null, home_phone: employee.details?.homePhone || null, mobile_phone: employee.phone || null, fax_number: employee.details?.faxNumber || null, web_page: employee.details?.webPage || null, street: employee.details?.street || null, city: employee.location || null, state_province: employee.details?.stateProvince || null, postal_code: employee.details?.postalCode || null, country_region: employee.region || null, status: employee.status, updated_at: new Date().toISOString() }, "employee_code");
+            }
+            catch (error: any) {
+                announce(`Save failed: ${error.message}`);
+                return;
+            }
+            setEmployeeRows(rows => editingCustomer ? rows.map(row => row.id === editingCustomer.id ? employee : row) : [...rows, employee]);
+            setDrawer(false);
+            setEditingCustomer(null);
+            announce(editingCustomer ? "Employee information saved to the database" : "New employee saved to the database");
+            return;
+        }
+        if (active === "Tasks") {
+            const form = e.currentTarget as HTMLFormElement;
+            const control = (label: string) => { const fieldLabel = Array.from(form.querySelectorAll("label")).find(item => item.childNodes[0]?.textContent?.trim() === label); return (fieldLabel?.querySelector("input,select,textarea") as HTMLInputElement | null)?.value.trim() || ""; };
+            const taskName = control("Project Name"), taskType = control("Task Type") || "Others";
+            if (!taskName) {
+                announce("Project Name is required");
+                return;
+            }
+            const task: Row = { id: editingCustomer?.id || `TSK-${String(42 + taskRows.length).padStart(3, "0")}`, name: taskName, account: control("Client") || "Unassigned client", owner: control("Employee") || "Alex Morgan", value: control("Priority") || "Medium", status: control("Project Status") || "Open", date: control("Next Call") || new Date().toLocaleDateString() };
+            setTaskRows(rows => editingCustomer ? rows.map(row => row.id === editingCustomer.id ? task : row) : [task, ...rows]);
+            if (taskType === "Offer") {
+                const opportunity: Row = { ...task, id: `OPP-${String(285 + opportunityRows.length).padStart(3, "0")}`, status: "Bidding", value: control("Offer Value") || "To be valued" };
+                setOpportunityRows(rows => rows.some(row => row.name === opportunity.name) ? rows : [opportunity, ...rows]);
+            }
+            setDrawer(false);
+            setEditingCustomer(null);
+            announce(taskType === "Offer" ? "Offer task saved and transferred to Opportunities" : editingCustomer ? "Task information updated" : "New task added to the task list");
+            return;
+        }
+        if (active === "Projects") {
+            const form = e.currentTarget as HTMLFormElement;
+            const control = (label: string) => { const fieldLabel = Array.from(form.querySelectorAll("label")).find(item => item.childNodes[0]?.textContent?.trim() === label); return (fieldLabel?.querySelector("input,select,textarea") as HTMLInputElement | null)?.value.trim() || ""; };
+            const progress = (form.querySelector(".project-progress-input") as HTMLInputElement | null)?.value || editingCustomer?.value || "0%";
+            const project: Row = { id: control("Project ID") || editingCustomer?.id || `PRJ-${String(120 + projectRows.length).padStart(3, "0")}`, name: control("Project Name") || editingCustomer?.name || "New project", account: editingCustomer?.account || "Unassigned client", owner: editingCustomer?.owner || "Unassigned", value: progress.includes("%") ? progress : `${progress}%`, status: control("Status") || editingCustomer?.status || "New", date: control("Estimated End Date") || editingCustomer?.date || new Date().toLocaleDateString() };
+            try {
+                await upsertSupabaseRow("projects", { project_code: project.id, name: project.name, client_id: await findClientId(project.account), project_type: control("Project Type") || null, owner_name: project.owner, progress: Number(project.value.replace("%", "")) || 0, status: project.status, currency: control("Currency") || "SAR", value: parseMoney(control("Actual Revenue")), start_date: toIsoDate(control("Start Date")), estimated_end_date: toIsoDate(project.date), notes: control("Notes") || null }, "project_code");
+            }
+            catch (error: any) {
+                announce(`Save failed: ${error.message}`);
+                return;
+            }
+            const nextRows = editingCustomer ? projectRows.map(row => row.id === editingCustomer.id ? project : row) : [project, ...projectRows];
+            setProjectRows(nextRows);
+            window.localStorage.setItem("tps-user-project-rows", JSON.stringify(nextRows));
+            setDrawer(false);
+            setEditingCustomer(null);
+            announce("Project changes saved and list updated");
+            return;
+        }
+        if (active === "Opportunities" || active === "Quotations") {
+            const form = e.currentTarget as HTMLFormElement;
+            const control = (label: string) => { const fieldLabel = Array.from(form.querySelectorAll("label")).find(item => item.childNodes[0]?.textContent?.trim() === label); return (fieldLabel?.querySelector("input,select,textarea") as HTMLInputElement | null)?.value.trim() || ""; };
+            const recordName = control("Project Name");
+            if (!recordName) {
+                announce("Project Name is required");
+                return;
+            }
+            const targetRows = active === "Quotations" ? quotationRows : opportunityRows;
+            const selectedContact = opportunityContacts.find(contact => contact.name === opportunityContactName);
+            const commercial: Row = {
+                id: editingCustomer?.id || `${active === "Quotations" ? "QUO" : "OPP"}-${String(286 + targetRows.length).padStart(3, "0")}`,
+                name: recordName,
+                account: control("Client") || control("End User") || "Unassigned client",
+                owner: control("Employee") || "Alex Morgan",
+                value: control("TPS Offer") || control("Supplier Total") || control("Offer Value") || "To be valued",
+                status: control("Client Inquiry Status") || control("Project Status") || "Bidding",
+                date: control("Offer Date") || new Date().toLocaleDateString(),
+                phone: selectedContact?.phone || control("Mobile #") || "",
+                email: selectedContact?.email || control("Email") || "",
+                region: selectedContact?.region || control("Region") || "",
+                location: selectedContact?.location || control("Location") || "",
+                details: {
+                    contactName: opportunityContactName,
+                    contactMobile: selectedContact?.phone || control("Mobile #") || "",
+                    contactEmail: selectedContact?.email || control("Email") || "",
+                    contactRegion: selectedContact?.region || control("Region") || "",
+                    contactLocation: selectedContact?.location || control("Location") || "",
+                    inquiryNo: control("Inquiry No / RFQ No"),
+                    inquiryDate: control("Inquiry Date"),
+                    inquirySubmissionDate: control("Inquiry Submission Date"),
+                    scopeOfWork: control("Scope Note") || control("Scope of Work"),
+                    endUser: control("End User"),
+                    howFoundType: control("How Found Type"),
+                    consultant: control("Consultant"),
+                    opportunityType: control("Opportunity Type"),
+                    documentType: control("Document Type"),
+                    projectName: control("Project Name") || recordName,
+                    clientInquiryStatus: control("Client Inquiry Status"),
+                    employee: control("Employee"),
+                    year: control("Year"),
+                    principleSupplierName: control("Principle / Supplier Name"),
+                    supplierOfferNo: control("Supplier Offer #"),
+                    supplierOfferDate: control("Supplier Offer Date"),
+                    currency: control("Currency"),
+                    supplierTotal: control("Supplier Total"),
+                    offerNo: control("Offer #"),
+                    offerDate: control("Offer Date"),
+                    submittalDate: control("Submittal Date"),
+                    tpsOffer: control("TPS Offer"),
+                    folder: control("Folder"),
+                    projectMilestone: control("Project Milestone"),
+                    notes: control("Notes")
+                }
+            };
+            const comment = opportunityComment.trim() || control("Comments");
+            let transferredProject: Row | null = null;
+            try {
+                const savedOpportunity: any = await upsertSupabaseRow("opportunities", { opportunity_code: commercial.id, project_name: commercial.name, client_id: await findClientId(commercial.account), contact_id: await findContactId(opportunityContactName, commercial.account), owner_name: commercial.owner, inquiry_status: projectWon ? "Won" : commercial.status, status: projectWon ? "Won" : "Active", document_type: control("Document Type") || "Inquiry", opportunity_type: control("Opportunity Type") || null, value: parseMoney(commercial.value), currency: control("Currency") || "SAR", last_call_date: toIsoDate(control("Last Call Date")), next_call_date: toIsoDate(control("Next Call Date")), scope_of_work: control("Scope Note") || control("Scope of Work") || null, notes: control("Notes") || null, close_date: toIsoDate(commercial.date) }, "opportunity_code");
+                if (comment) {
+                    const savedHistory: any = await insertSupabaseRow("opportunity_history", { opportunity_id: savedOpportunity.id, note: comment });
+                    const entry = `${new Date(savedHistory.created_at).toLocaleString()} — ${comment}`;
+                    setOpportunityHistory(history => ({ ...history, [commercial.id]: [...(history[commercial.id] || []), entry] }));
+                }
+                if (projectWon) {
+                    const projectCode = commercial.id.replace(/^(OPP|QUO)-/, "PRJ-");
+                    const clientId = savedOpportunity.client_id || await findClientId(commercial.account);
+                    const wonOpportunity: Row = { ...commercial, status: "Won", details: { ...commercial.details, projectWon: "true" } };
+                    const snapshot = { opportunity: wonOpportunity, history: opportunityHistory[commercial.id] || [], transferredAt: new Date().toISOString() };
+                    const savedProject: any = await upsertSupabaseRow("projects", { project_code: projectCode, opportunity_id: savedOpportunity.id, client_id: clientId, name: commercial.name, project_type: control("Project Type") || control("Opportunity Type") || null, owner_name: control("Project Owner") || commercial.owner, progress: projectProgress, status: projectStatus, currency: control("Currency") || "SAR", value: parseMoney(commercial.value), start_date: toIsoDate(control("Start Date")), estimated_end_date: toIsoDate(control("Estimated End Date")), notes: control("Notes") || null, updated_at: new Date().toISOString() }, "opportunity_id");
+                    transferredProject = { id: savedProject.project_code || projectCode, name: savedProject.name || commercial.name, account: commercial.account, owner: savedProject.owner_name || commercial.owner, value: `${savedProject.progress ?? projectProgress}%`, status: savedProject.status || projectStatus, date: savedProject.estimated_end_date || commercial.date, phone: commercial.phone, email: commercial.email, region: commercial.region, location: commercial.location, details: { ...commercial.details, opportunityId: commercial.id, opportunitySnapshot: snapshot } };
+                }
+            }
+            catch (error: any) {
+                announce(`Save failed: ${error.message}`);
+                return;
+            }
+            const savedCommercial = transferredProject ? { ...commercial, status: "Won" } : commercial;
+            const update = (rows: Row[]) => editingCustomer ? rows.map(row => row.id === editingCustomer.id ? savedCommercial : row) : [savedCommercial, ...rows];
+            active === "Quotations" ? setQuotationRows(update) : setOpportunityRows(update);
+            if (transferredProject) {
+                setProjectRows(rows => { const next = rows.some(row => row.id === transferredProject!.id) ? rows.map(row => row.id === transferredProject!.id ? transferredProject! : row) : [transferredProject!, ...rows]; window.localStorage.setItem("tps-user-project-rows", JSON.stringify(next)); return next; });
+            }
+            setDrawer(false);
+            setEditingCustomer(null);
+            announce(transferredProject ? "Opportunity transferred to the project list" : comment ? "Comment added to History with date and time" : editingCustomer ? "Commercial record updated" : "New commercial record added");
+            return;
+        }
+        setDrawer(false);
+        announce(`${editingCustomer ? `${actionName} changes` : `New ${actionName}`} saved`);
+    }
+    const actionName = ({ Customers: "client", Contacts: "contact", Opportunities: "opportunity", Quotations: "quotation", Projects: "project", Suppliers: "supplier", Activities: "activity", Tasks: "task", Employees: "employee" } as Record<string, string>)[active] || "record";
+    const accessFormName = ({ Customers: "Client List", Contacts: "Contact Details", Opportunities: "Maintain Offers", Quotations: "Maintain Offers", Projects: "Project Status", Suppliers: "Supplier List", Activities: "Activity Details", Tasks: "Daily Tasks", Employees: "Employee Details" } as Record<string, string>)[active];
+    const activeForm = accessPages.find(page => page.name === accessFormName);
+    const drawerGroups: any = active === "Customers" && customerPage === "Opportunities" ? { map: () => <CustomerQuotationList customer={editingCustomer} contacts={contactListRows} announce={announce} employees={employeeRows} items={visibleOpportunityRows} setItems={setOpportunityRows} onWon={project => setWonProjects(rows => rows.some(row => row.id === project.id) ? rows : [project, ...rows])} onOpenWorkspaceOpportunity={opportunity => { setOpportunityClientContext(opportunity?.account || editingCustomer?.name || ""); setActive("Opportunities"); setEditingCustomer(opportunity); setOpportunitySection("Inquiry Information"); setDrawer(true); }}/> } : active === "Customers" && customerPage === "Suppliers" ? { map: () => <CustomerSuppliers announce={announce}/> } : active === "Customers" && customerPage === "Projects" ? { map: () => <CustomerProjects customer={editingCustomer} announce={announce} wonProjects={wonProjects} workspaceProjects={projectRows}/> } : active === "Customers" && customerPage === "Activities" ? { map: () => <CustomerActivities announce={announce}/> } : active === "Customers" && customerPage === "Delivery" ? { map: () => <CustomerDeliveries announce={announce}/> } : active === "Customers" && customerPage === "Tasks" ? { map: () => <CustomerTasks announce={announce}/> } : active === "Customers" ? customerPages.find(page => page.name === customerPage)?.groups : active === "Projects" && editingCustomer ? { map: () => <CustomerProjects customer={customerRows.find(client => client.name === editingCustomer.account) || null} announce={announce} wonProjects={wonProjects} workspaceProjects={projectRows} initialProject={editingCustomer}/> } : activeForm?.groups;
+    useEffect(() => {
+        if (new URLSearchParams(window.location.search).get("view") === "customer") {
+            setActive("Customers");
+            setEditingCustomer(records.Customers[0] || null);
+            setCustomerPage(new URLSearchParams(window.location.search).get("customerTab") === "quotation" ? "Opportunities" : "General");
+            setDrawer(true);
+        }
+    }, []);
+    useEffect(() => {
+        if (editingCustomer)
+            setContactRows([Number(editingCustomer.id.replace(/\D/g, ""))]);
+    }, [editingCustomer]);
+    useEffect(() => {
+        if (!drawer)
+            return;
+        const form = document.querySelector(".access-drawer form") as HTMLFormElement | null;
+        if (!form)
+            return;
+        const employeeLabel = Array.from(form.querySelectorAll("label")).find(label => label.childNodes[0]?.textContent?.trim() === "Employee");
+        const employeeSelect = employeeLabel?.querySelector("select");
+        if (employeeSelect && !employeeSelect.querySelector('option[value="__manage_employees"]')) {
+            const option = document.createElement("option");
+            option.value = "__manage_employees";
+            option.textContent = "Add / modify employees...";
+            employeeSelect.appendChild(option);
+        }
+        const documentTypeLabel = Array.from(form.querySelectorAll("label")).find(label => label.childNodes[0]?.textContent?.trim() === "Document Type");
+        const documentTypeSelect = documentTypeLabel?.querySelector("select");
+        if (documentTypeSelect && !documentTypeSelect.querySelector('option[value="__manage_document_types"]')) {
+            const option = document.createElement("option");
+            option.value = "__manage_document_types";
+            option.textContent = "Add / modify document types...";
+            documentTypeSelect.appendChild(option);
+        }
+        const opportunityTypeLabel = Array.from(form.querySelectorAll("label")).find(label => label.childNodes[0]?.textContent?.trim() === "Opportunity Type");
+        const opportunityTypeSelect = opportunityTypeLabel?.querySelector("select");
+        if (opportunityTypeSelect && !opportunityTypeSelect.querySelector('option[value="__manage_opportunity_types"]')) {
+            const option = document.createElement("option");
+            option.value = "__manage_opportunity_types";
+            option.textContent = "Add / modify opportunity types...";
+            opportunityTypeSelect.appendChild(option);
+        }
+        const projectStatusLabel = Array.from(form.querySelectorAll("label")).find(label => label.childNodes[0]?.textContent?.trim() === "Client Project Status");
+        const projectStatusSelect = projectStatusLabel?.querySelector("select");
+        if (projectStatusSelect && !projectStatusSelect.querySelector('option[value="__manage_project_statuses"]')) {
+            const option = document.createElement("option");
+            option.value = "__manage_project_statuses";
+            option.textContent = "Add / modify project statuses...";
+            projectStatusSelect.appendChild(option);
+        }
+        const currencySelects = Array.from(form.querySelectorAll("label")).filter(label => label.childNodes[0]?.textContent?.trim() === "Currency").map(label => label.querySelector("select")).filter((select): select is HTMLSelectElement => Boolean(select));
+        currencySelects.forEach(select => { if (!select.querySelector('option[value="__manage_currencies"]')) {
+            const option = document.createElement("option");
+            option.value = "__manage_currencies";
+            option.textContent = "Add / modify currencies...";
+            select.appendChild(option);
+        } });
+        const labels = Array.from(form.querySelectorAll("label"));
+        const projectStartInput = labels.find(label => label.childNodes[0]?.textContent?.trim() === "Start Date")?.querySelector("input") as HTMLInputElement | null;
+        if (projectStartInput) {
+            projectStartInput.setAttribute("type", "date");
+            projectStartInput.removeAttribute("placeholder");
+            if (projectStartInput.value && !/^\d{4}-\d{2}-\d{2}$/.test(projectStartInput.value))
+                projectStartInput.value = "";
+            projectStartInput.addEventListener("click", () => projectStartInput.showPicker?.());
+        }
+        const projectEndInput = labels.find(label => label.childNodes[0]?.textContent?.trim() === "Estimated End Date")?.querySelector("input") as HTMLInputElement | null;
+        if (projectEndInput) {
+            projectEndInput.setAttribute("type", "date");
+            projectEndInput.removeAttribute("placeholder");
+            if (projectEndInput.value && !/^\d{4}-\d{2}-\d{2}$/.test(projectEndInput.value))
+                projectEndInput.value = "";
+            projectEndInput.addEventListener("click", () => projectEndInput.showPicker?.());
+        }
+        if (active === "Projects" && projectStartInput && projectEndInput && !labels.some(label => label.childNodes[0]?.textContent?.trim() === "Duration (Days)")) {
+            const durationLabel = document.createElement("label");
+            durationLabel.append("Duration (Days)");
+            const durationInput = document.createElement("input");
+            durationInput.readOnly = true;
+            durationInput.placeholder = "Calculated automatically";
+            durationLabel.appendChild(durationInput);
+            const projectGrid = projectEndInput.closest(".drawer-field-grid");
+            const currencyLabel = labels.find(label => label.childNodes[0]?.textContent?.trim() === "Currency");
+            projectGrid?.insertBefore(durationLabel, currencyLabel?.parentElement === projectGrid ? currencyLabel : null);
+            const calculateDuration = () => { projectEndInput.min = projectStartInput.value; if (!projectStartInput.value || !projectEndInput.value) {
+                durationInput.value = "";
+                return;
+            } const days = Math.ceil((new Date(`${projectEndInput.value}T00:00:00`).getTime() - new Date(`${projectStartInput.value}T00:00:00`).getTime()) / 86400000); durationInput.value = String(Math.max(0, days)); };
+            projectStartInput.addEventListener("change", calculateDuration);
+            projectEndInput.addEventListener("change", calculateDuration);
+            calculateDuration();
+        }
+        const projectTypeLabel = labels.find(label => label.childNodes[0]?.textContent?.trim() === "Project Type");
+        const projectTypeInput = projectTypeLabel?.querySelector("input");
+        if (active === "Projects" && projectTypeLabel && projectTypeInput) {
+            const select = document.createElement("select");
+            select.replaceChildren(new Option("Select...", ""), ...projectTypeValues.map(value => new Option(value, value)), new Option("Add / edit project types...", "__manage_project_types"));
+            projectTypeInput.replaceWith(select);
+        }
+        const clientSelect = labels.find(label => label.childNodes[0]?.textContent?.trim() === "Client")?.querySelector("select") as HTMLSelectElement | null;
+        const contactLabel = labels.find(label => label.childNodes[0]?.textContent?.trim() === "Contact Person");
+        const contactInput = contactLabel?.querySelector("input") as HTMLInputElement | null;
+        const contactSelect = contactInput ? document.createElement("select") : null;
+        const endUserLabel = labels.find(label => label.childNodes[0]?.textContent?.trim() === "End User");
+        const endUserInput = endUserLabel?.querySelector("input") as HTMLInputElement | null;
+        const endUserSelect = endUserInput ? document.createElement("select") : null;
+        const supplierLabel = labels.find(label => label.childNodes[0]?.textContent?.trim() === "Principle / Supplier Name");
+        const supplierInput = supplierLabel?.querySelector("input") as HTMLInputElement | null;
+        const supplierSelect = supplierInput ? document.createElement("select") : null;
+        const equipmentLabel = labels.find(label => label.childNodes[0]?.textContent?.trim() === "Equipment");
+        const equipmentInput = equipmentLabel?.querySelector("input") as HTMLInputElement | null;
+        const equipmentSelect = equipmentInput ? document.createElement("select") : null;
+        const materialLabel = labels.find(label => label.childNodes[0]?.textContent?.trim() === "Supplier Scope");
+        const materialInput = materialLabel?.querySelector("textarea") as HTMLTextAreaElement | null;
+        const materialSelect = materialInput ? document.createElement("select") : null;
+        const relatedInput = (name: string) => labels.find(label => label.childNodes[0]?.textContent?.trim() === name)?.querySelector("input") as HTMLInputElement | null;
+        const telephoneInput = relatedInput("Telephone"), regionInput = relatedInput("Region"), locationInput = relatedInput("Location");
+        const clearContactDetails = () => { if (telephoneInput)
+            telephoneInput.value = ""; if (regionInput)
+            regionInput.value = ""; if (locationInput)
+            locationInput.value = ""; };
+        const refreshContacts = () => { if (!contactSelect)
+            return; const clientName = clientSelect?.value || editingCustomer?.account || ""; contactSelect.replaceChildren(new Option("Select contact person...", ""), ...clientContactDetails.filter(contact => contact.client === clientName).map(contact => new Option(contact.name, contact.name)), new Option("Add / modify contacts...", "__manage_contacts")); contactInput!.value = ""; clearContactDetails(); };
+        if (contactInput && contactSelect) {
+            contactInput.hidden = true;
+            contactSelect.setAttribute("aria-label", "Contact Person");
+            contactInput.insertAdjacentElement("afterend", contactSelect);
+            refreshContacts();
+        }
+        if (endUserInput && endUserSelect) {
+            endUserInput.hidden = true;
+            endUserSelect.setAttribute("aria-label", "End User");
+            endUserSelect.replaceChildren(new Option("Select end user...", ""), ...['Private', 'NWC', 'Saudi Water Authority', 'Saudi Aramco', 'Saudi Electricity Company'].map(value => new Option(value, value)), new Option("Add / modify end users...", "__manage_end_users"));
+            endUserSelect.value = endUserInput.value;
+            endUserInput.insertAdjacentElement("afterend", endUserSelect);
+        }
+        if (supplierInput && supplierSelect) {
+            supplierInput.hidden = true;
+            supplierSelect.setAttribute("aria-label", "Principle / Supplier Name");
+            supplierSelect.replaceChildren(new Option("Select supplier...", ""), ...supplierRows.map(supplier => new Option(supplier.name, supplier.name)), new Option("Add / modify suppliers...", "__manage_suppliers"));
+            supplierSelect.value = supplierInput.value;
+            supplierInput.insertAdjacentElement("afterend", supplierSelect);
+        }
+        if (equipmentInput && equipmentSelect) {
+            equipmentInput.hidden = true;
+            equipmentSelect.setAttribute("aria-label", "Equipment");
+            equipmentSelect.replaceChildren(new Option("Select equipment...", ""), ...['Pumps', 'Valves', 'Control Panels', 'Instrumentation', 'Water Treatment Package', 'Electrical Equipment'].map(value => new Option(value, value)), new Option("Add / modify equipment...", "__manage_equipment"));
+            equipmentSelect.value = equipmentInput.value;
+            equipmentInput.insertAdjacentElement("afterend", equipmentSelect);
+        }
+        if (materialInput && materialSelect) {
+            materialInput.hidden = true;
+            materialSelect.multiple = true;
+            materialSelect.size = 7;
+            materialSelect.className = "supplier-material-list";
+            materialSelect.setAttribute("aria-label", "Supplier Materials");
+            materialSelect.replaceChildren(...['Pumps', 'Valves', 'Control Panels', 'Instrumentation', 'Water Treatment Packages', 'Electrical Equipment'].map(value => new Option(value, value)), new Option("Add / modify materials...", "__manage_materials"));
+            materialInput.insertAdjacentElement("afterend", materialSelect);
+        }
+        const handleFormChange = (event: Event) => { const control = event.target as HTMLInputElement | HTMLSelectElement; if (control === clientSelect) {
+            refreshContacts();
+            return;
+        } if (control === contactSelect) {
+            if (control.value === "__manage_contacts") {
+                const client = customerRows.find(item => item.name === clientSelect?.value);
+                if (client) {
+                    setActive("Customers");
+                    setEditingCustomer(client);
+                    setCustomerPage("Contacts");
+                    setDrawer(true);
+                }
+                else
+                    announce("Choose a client before adding or modifying contacts");
+                return;
+            }
+            if (contactInput)
+                contactInput.value = control.value;
+            const contact = clientContactDetails.find(item => item.client === clientSelect?.value && item.name === control.value);
+            if (telephoneInput)
+                telephoneInput.value = contact?.phone || "";
+            if (regionInput)
+                regionInput.value = contact?.region || "";
+            if (locationInput)
+                locationInput.value = contact?.location || "";
+            return;
+        } if (control instanceof HTMLSelectElement && control.value === "__manage_clients") {
+            setDrawer(false);
+            setEditingCustomer(null);
+            setActive("Customers");
+            setQuery("");
+            setFilter("All statuses");
+            return;
+        } if (control instanceof HTMLSelectElement && control.value === "__manage_employees") {
+            setDrawer(false);
+            setEditingCustomer(null);
+            setActive("Employees");
+            setQuery("");
+            setFilter("All statuses");
+            return;
+        } if (control instanceof HTMLSelectElement && control.value === "__manage_document_types") {
+            setDirectoryTarget("Document types");
+            setDrawer(false);
+            setEditingCustomer(null);
+            setActive("Directory");
+            setQuery("");
+            setFilter("All statuses");
+            return;
+        } if (control instanceof HTMLSelectElement && control.value === "__manage_opportunity_types") {
+            setDirectoryTarget("Opportunity types");
+            setDrawer(false);
+            setEditingCustomer(null);
+            setActive("Directory");
+            setQuery("");
+            setFilter("All statuses");
+            return;
+        } if (control instanceof HTMLSelectElement && control.value === "__manage_project_types") {
+            setDirectoryTarget("Project types");
+            setDrawer(false);
+            setEditingCustomer(null);
+            setActive("Directory");
+            setQuery("");
+            setFilter("All statuses");
+            return;
+        } if (!(control instanceof HTMLInputElement) || control.type !== "date" || control.closest("label")?.childNodes[0]?.textContent?.trim() !== "Last Call Date" || !control.value)
+            return; const nextDate = new Date(`${control.value}T00:00:00`); nextDate.setDate(nextDate.getDate() + 7); const nextLabel = Array.from(form.querySelectorAll("label")).find(label => label.childNodes[0]?.textContent?.trim() === "Next Call Date"); const nextInput = nextLabel?.querySelector('input[type="date"]') as HTMLInputElement | null; if (nextInput)
+            nextInput.value = nextDate.toISOString().slice(0, 10); };
+        const handleEndUserChange = () => { if (!endUserSelect)
+            return; if (endUserSelect.value === "__manage_end_users") {
+            setDrawer(false);
+            setEditingCustomer(null);
+            setActive("Directory");
+            setQuery("");
+            setFilter("All statuses");
+            return;
+        } if (endUserInput)
+            endUserInput.value = endUserSelect.value; };
+        const handleProjectStatusChange = () => { if (projectStatusSelect?.value !== "__manage_project_statuses")
+            return; setDrawer(false); setEditingCustomer(null); setActive("Directory"); setQuery(""); setFilter("All statuses"); };
+        const handleSupplierChange = () => { if (!supplierSelect)
+            return; if (supplierSelect.value === "__manage_suppliers") {
+            setDrawer(false);
+            setEditingCustomer(null);
+            setActive("Suppliers");
+            setQuery("");
+            setFilter("All statuses");
+            return;
+        } if (supplierInput)
+            supplierInput.value = supplierSelect.value; };
+        const handleEquipmentChange = () => { if (!equipmentSelect)
+            return; if (equipmentSelect.value === "__manage_equipment") {
+            setDirectoryTarget("Equipment");
+            setDrawer(false);
+            setEditingCustomer(null);
+            setActive("Directory");
+            setQuery("");
+            setFilter("All statuses");
+            return;
+        } if (equipmentInput)
+            equipmentInput.value = equipmentSelect.value; };
+        const handleCurrencyChange = (event: Event) => { const select = event.target as HTMLSelectElement; if (select.value !== "__manage_currencies")
+            return; setDrawer(false); setEditingCustomer(null); setActive("Directory"); setQuery(""); setFilter("All statuses"); };
+        const handleMaterialChange = () => { if (!materialSelect)
+            return; if (Array.from(materialSelect.selectedOptions).some(option => option.value === "__manage_materials")) {
+            setDirectoryTarget("Equipment");
+            setDrawer(false);
+            setEditingCustomer(null);
+            setActive("Directory");
+            setQuery("");
+            setFilter("All statuses");
+            return;
+        } if (materialInput)
+            materialInput.value = Array.from(materialSelect.selectedOptions).map(option => option.value).join(", "); };
+        form.addEventListener("change", handleFormChange);
+        endUserSelect?.addEventListener("change", handleEndUserChange);
+        projectStatusSelect?.addEventListener("change", handleProjectStatusChange);
+        supplierSelect?.addEventListener("change", handleSupplierChange);
+        equipmentSelect?.addEventListener("change", handleEquipmentChange);
+        currencySelects.forEach(select => select.addEventListener("change", handleCurrencyChange));
+        materialSelect?.addEventListener("change", handleMaterialChange);
+        return () => { form.removeEventListener("change", handleFormChange); endUserSelect?.removeEventListener("change", handleEndUserChange); projectStatusSelect?.removeEventListener("change", handleProjectStatusChange); supplierSelect?.removeEventListener("change", handleSupplierChange); equipmentSelect?.removeEventListener("change", handleEquipmentChange); currencySelects.forEach(select => select.removeEventListener("change", handleCurrencyChange)); materialSelect?.removeEventListener("change", handleMaterialChange); contactSelect?.remove(); endUserSelect?.remove(); supplierSelect?.remove(); equipmentSelect?.remove(); materialSelect?.remove(); if (contactInput)
+            contactInput.hidden = false; if (endUserInput)
+            endUserInput.hidden = false; if (supplierInput)
+            supplierInput.hidden = false; if (equipmentInput)
+            equipmentInput.hidden = false; if (materialInput)
+            materialInput.hidden = false; };
+    }, [drawer, active, customerRows, projectTypeValues, supplierRows]);
+    return <main className="app-shell">
     <header className="topbar">
-      <button className="product-switcher" aria-label="Open product switcher" onClick={()=>announce("Product switcher opened")}>+</button>
+      <button className="product-switcher" aria-label="Open product switcher" onClick={() => announce("Product switcher opened")}>+</button>
       <button className="brand" onClick={() => navigate("Overview")}><strong>TPS</strong><span>ClientCore</span></button>
-      <div className="top-spacer" />
-      <label className="search"><span aria-hidden="true">S</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Search ${active.toLowerCase()}...`} aria-label={`Search ${active}`} /></label>
-      <button className="icon-btn" aria-label="Help" onClick={()=>announce("Help center opened")}>?</button><button className="icon-btn notification" aria-label="Notifications" onClick={()=>announce("No new notifications")}>N<i /></button><button className="sign-out" onClick={()=>supabase?.auth.signOut()}>Sign out</button>
+      <div className="top-spacer"/>
+      <label className="search"><span aria-hidden="true">S</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Search ${active.toLowerCase()}...`} aria-label={`Search ${active}`}/></label>
+      <button className="icon-btn" aria-label="Help" onClick={() => announce("Help center opened")}>?</button><button className="icon-btn notification" aria-label="Notifications" onClick={() => announce("No new notifications")}>N<i /></button>
     </header>
 
     <aside className="sidebar"><nav aria-label="Primary navigation"><p className="eyebrow">Workspace</p>
-      {navigation.map(item => <button key={item.label} className={active===item.label?"active":""} onClick={() => navigate(item.label)}><span className={`nav-icon ${item.color}`}>{item.icon}</span>{item.label==="Customers"?"Clients":item.label==="Directory"?"Settings":item.label}</button>)}
-      <p className="eyebrow lower">Manage</p><button className={active==="Team & access"?"active":""} onClick={() => navigate("Team & access")}><span>TM</span>Team & access</button>
+      {navigation.map(item => <button key={item.label} className={active === item.label ? "active" : ""} onClick={() => navigate(item.label)}><span className={`nav-icon ${item.color}`}>{item.icon}</span>{item.label === "Customers" ? "Clients" : item.label === "Directory" ? "Settings" : item.label}</button>)}
+      <p className="eyebrow lower">Manage</p><button className={active === "Team & access" ? "active" : ""} onClick={() => navigate("Team & access")}><span>TM</span>Team & access</button>
     </nav><div className="org-card"><span className="org-mark">T</span><div><strong>TPS</strong><small>CRM workspace</small></div><span>^</span></div></aside>
 
     <section className="workspace">
-      <div className="page-heading"><div><p className="breadcrumb">ClientCore / {active==="Customers"?"Clients":active}</p><h1>{active==="Overview"?"Welcome to TPS CRM":pageCopy[active]?.[0]}</h1><p>{active==="Overview"?"Add your records to begin tracking your business.":pageCopy[active]?.[1]}</p></div>
-        <div className="page-heading-actions"><img src="/tps-logo.png" alt="Technology Products and Services Co." />{!['Reports','Directory','Team & access'].includes(active) && <button className="primary" onClick={() => { setEditingCustomer(null); if(active==="Opportunities"){setOpportunityClientContext("");setOpportunityContactName("")} setCustomerPage("General"); setOpportunitySection("Inquiry Information"); setContactRows([1]); setDrawer(true); }}><span>+</span>Add {actionName}</button>}{active === "Reports" && <button className="primary" onClick={() => announce("Report exported as CSV")}><span>D</span>Export report</button>}</div>
+      <div className="page-heading"><div><p className="breadcrumb">ClientCore / {active === "Customers" ? "Clients" : active}</p><h1>{active === "Overview" ? "Welcome to TPS CRM" : pageCopy[active]?.[0]}</h1><p>{active === "Overview" ? "Add your records to begin tracking your business." : pageCopy[active]?.[1]}</p></div>
+        <div className="page-heading-actions"><img src="/tps-logo.png" alt="Technology Products and Services Co."/>{!['Reports', 'Directory', 'Team & access'].includes(active) && <button className="primary" onClick={() => { setEditingCustomer(null); if (active === "Opportunities") {
+        setOpportunityClientContext("");
+        setOpportunityContactName("");
+    } setCustomerPage("General"); setOpportunitySection("Inquiry Information"); setContactRows([1]); setDrawer(true); }}><span>+</span>Add {actionName}</button>}{active === "Reports" && <button className="primary" onClick={() => announce("Report exported as CSV")}><span>D</span>Export report</button>}</div>
       </div>
 
-      {active === "Overview" && <Overview navigate={navigate} announce={announce} opportunities={[...visibleOpportunityRows,...quotationRows]} clients={customerRows} tasks={taskRows} />}
-      {["Customers","Contacts","Opportunities","Projects","Suppliers","Activities","Tasks","Employees"].includes(active) && <RecordsPage module={active} rowsOverride={active==="Customers"?customerRows:active==="Contacts"?contactListRows:active==="Suppliers"?supplierRows:active==="Employees"?employeeRows:active==="Tasks"?taskRows:active==="Projects"?projectRows:active==="Opportunities"?[...visibleOpportunityRows,...quotationRows]:undefined} sourceCountOverride={active==="Customers"?customerRows.length:active==="Contacts"?contactListRows.length:active==="Suppliers"?supplierRows.length:active==="Projects"?projectRows.length:active==="Opportunities"?visibleOpportunityRows.length:undefined} query={query} filter={filter} setFilter={setFilter} announce={announce} onNewContact={() => { setEditingCustomer(null); setCustomerPage("Contacts"); setContactRows([1]); setDrawer(true); }} onDeleteCommercial={async record=>{if(window.confirm(`Delete ${record.name} from the commercial list?`)){try{await deleteSupabaseRow("opportunities","opportunity_code",record.id);record.id.startsWith("QUO-")?setQuotationRows(rows=>rows.filter(row=>row.id!==record.id)):setOpportunityRows(rows=>rows.filter(row=>row.id!==record.id));announce(`${record.name} deleted`)}catch(error:any){announce(`Delete failed: ${error.message}`)}}}} onDeleteContact={async contact=>{if(window.confirm(`Delete ${contact.name} from the contact list?`)){try{await deleteSupabaseRow("contacts","contact_code",contact.id);setContactListRows(rows=>rows.filter(row=>row.id!==contact.id));announce(`${contact.name} deleted`)}catch(error:any){announce(`Delete failed: ${error.message}`)}}}} onDeleteCustomer={async customer=>{if(window.confirm(`Delete ${customer.name} from the client list?`)){try{await deleteSupabaseRow("clients","client_code",customer.id);setCustomerRows(rows=>rows.filter(row=>row.id!==customer.id));announce(`${customer.name} deleted`)}catch(error:any){announce(`Delete failed: ${error.message}`)}}}} onDeleteEmployee={employee=>{if(window.confirm(`Delete ${employee.name} from the employee list?`)){setEmployeeRows(rows=>rows.filter(row=>row.id!==employee.id));announce(`${employee.name} deleted`)}}} onEditCustomer={customer => { setEditingCustomer(customer); if(active==="Opportunities"){setOpportunityClientContext(customer.account);setOpportunityContactName(customer.details?.contactName||"")} setCustomerPage("General"); setOpportunitySection("Inquiry Information"); setContactRows([1]); setDrawer(true); }} />}
-      {active === "Directory" && <Directory announce={announce} targetGroup={directoryTarget} equipmentValues={equipmentValues} onEquipmentChange={setEquipmentValues} projectTypeValues={projectTypeValues} onProjectTypeChange={setProjectTypeValues} />}
-      {active === "Reports" && <Reports announce={announce} />}
-      {active === "Team & access" && <PermissionsPage announce={announce} employees={employeeRows.map(employee=>({id:employee.id,name:employee.name,email:employee.email}))} />}
+      {active === "Overview" && <Overview navigate={navigate} announce={announce} opportunities={[...visibleOpportunityRows, ...quotationRows]} clients={customerRows} tasks={taskRows}/>}
+      {["Customers", "Contacts", "Opportunities", "Projects", "Suppliers", "Activities", "Tasks", "Employees"].includes(active) && <RecordsPage module={active} rowsOverride={active === "Customers" ? customerRows : active === "Contacts" ? contactListRows : active === "Suppliers" ? supplierRows : active === "Employees" ? employeeRows : active === "Tasks" ? taskRows : active === "Projects" ? projectRows : active === "Opportunities" ? [...visibleOpportunityRows, ...quotationRows] : undefined} sourceCountOverride={active === "Customers" ? customerRows.length : active === "Contacts" ? contactListRows.length : active === "Suppliers" ? supplierRows.length : active === "Projects" ? projectRows.length : active === "Opportunities" ? visibleOpportunityRows.length : undefined} query={query} filter={filter} setFilter={setFilter} announce={announce} onNewContact={() => { setEditingCustomer(null); setCustomerPage("Contacts"); setContactRows([1]); setDrawer(true); }} onDeleteCommercial={async (record) => { if (window.confirm(`Delete ${record.name} from the commercial list?`)) {
+        try {
+            await deleteSupabaseRow("opportunities", "opportunity_code", record.id);
+            record.id.startsWith("QUO-") ? setQuotationRows(rows => rows.filter(row => row.id !== record.id)) : setOpportunityRows(rows => rows.filter(row => row.id !== record.id));
+            announce(`${record.name} deleted`);
+        }
+        catch (error: any) {
+            announce(`Delete failed: ${error.message}`);
+        }
+    } }} onDeleteContact={async (contact) => { if (window.confirm(`Delete ${contact.name} from the contact list?`)) {
+        try {
+            await deleteSupabaseRow("contacts", "contact_code", contact.id);
+            setContactListRows(rows => rows.filter(row => row.id !== contact.id));
+            announce(`${contact.name} deleted`);
+        }
+        catch (error: any) {
+            announce(`Delete failed: ${error.message}`);
+        }
+    } }} onDeleteCustomer={async (customer) => { if (window.confirm(`Delete ${customer.name} from the client list?`)) {
+        try {
+            await deleteSupabaseRow("clients", "client_code", customer.id);
+            setCustomerRows(rows => rows.filter(row => row.id !== customer.id));
+            announce(`${customer.name} deleted`);
+        }
+        catch (error: any) {
+            announce(`Delete failed: ${error.message}`);
+        }
+    } }} onDeleteEmployee={employee => { if (window.confirm(`Delete ${employee.name} from the employee list?`)) {
+        setEmployeeRows(rows => rows.filter(row => row.id !== employee.id));
+        announce(`${employee.name} deleted`);
+    } }} onEditCustomer={customer => { setEditingCustomer(customer); if (active === "Opportunities") {
+        setOpportunityClientContext(customer.account);
+        setOpportunityContactName(customer.details?.contactName || "");
+    } setCustomerPage("General"); setOpportunitySection("Inquiry Information"); setContactRows([1]); setDrawer(true); }}/>}
+      {active === "Directory" && <Directory announce={announce} targetGroup={directoryTarget} equipmentValues={equipmentValues} onEquipmentChange={setEquipmentValues} projectTypeValues={projectTypeValues} onProjectTypeChange={setProjectTypeValues}/>}
+      {active === "Reports" && <Reports announce={announce}/>}
+      {active === "Team & access" && <PermissionsPage announce={announce} employees={employeeRows.map(employee => ({ id: employee.id, name: employee.name, email: employee.email }))}/>}
     </section>
 
-    {drawer && <div className={`drawer-backdrop ${editingCustomer&&active==="Customers"?"customer-fullpage":""}`} onMouseDown={() => setDrawer(false)}>
-      <aside className="drawer access-drawer" role="dialog" aria-modal="true" aria-label={`${editingCustomer?"Edit":"Add"} ${actionName}`} onMouseDown={e => e.stopPropagation()}>
-        <div className="drawer-head"><div><p>{accessFormName || "Customer record"}</p><h2>{editingCustomer?editingCustomer.name:`New ${actionName}`}</h2><small>{editingCustomer?`Editing ${editingCustomer.id}`:"Fields mapped from CRM-2026-V3 Access"}</small></div><div className="drawer-title-actions">{editingCustomer&&active==="Customers"&&<><button className="shortcut" onClick={()=>setCustomerPage("Contacts")}>Contact list</button></>}<button className="shortcut" onClick={() => setDrawer(false)} aria-label="Close">Close</button></div></div>
-        {active === "Customers" && <nav className="customer-tabs" aria-label="Customer form pages">{customerPages.map(page=><button key={page.name} className={customerPage===page.name?"active":""} onClick={()=>setCustomerPage(page.name)}><span>{page.icon}</span>{page.name==="General"?"Client":page.name}</button>)}</nav>}
-        <form key={`${editingCustomer?.id||"new"}-${customerPage}`} className={active === "Customers" ? "has-tabs" : active==="Opportunities"?"has-opportunity-tabs":""} onSubmit={saveDrawer}>
-          {active==="Opportunities"?<>
+    {drawer && <div className={`drawer-backdrop ${editingCustomer && active === "Customers" ? "customer-fullpage" : ""}`} onMouseDown={() => setDrawer(false)}>
+      <aside className="drawer access-drawer" role="dialog" aria-modal="true" aria-label={`${editingCustomer ? "Edit" : "Add"} ${actionName}`} onMouseDown={e => e.stopPropagation()}>
+        <div className="drawer-head"><div><p>{accessFormName || "Customer record"}</p><h2>{editingCustomer ? editingCustomer.name : `New ${actionName}`}</h2><small>{editingCustomer ? `Editing ${editingCustomer.id}` : "Fields mapped from CRM-2026-V3 Access"}</small></div><div className="drawer-title-actions">{editingCustomer && active === "Customers" && <><button className="shortcut" onClick={() => setCustomerPage("Contacts")}>Contact list</button></>}<button className="shortcut" onClick={() => setDrawer(false)} aria-label="Close">Close</button></div></div>
+        {active === "Customers" && <nav className="customer-tabs" aria-label="Customer form pages">{customerPages.map(page => <button key={page.name} className={customerPage === page.name ? "active" : ""} onClick={() => setCustomerPage(page.name)}><span>{page.icon}</span>{page.name === "General" ? "Client" : page.name}</button>)}</nav>}
+        <form key={`${editingCustomer?.id || "new"}-${customerPage}`} className={active === "Customers" ? "has-tabs" : active === "Opportunities" ? "has-opportunity-tabs" : ""} onSubmit={saveDrawer}>
+          {active === "Opportunities" ? <>
             <fieldset className="opportunity-reference-summary"><legend>Opportunity details</legend><div className="drawer-field-grid">
-              <label>Client<select value={opportunityClientName} onChange={event=>{setOpportunityClientContext(event.target.value);setOpportunityContactName("")}}><option value="">Select...</option>{customerRows.map(client=><option key={client.id}>{client.name}</option>)}</select></label>
-              <label>Contact Person<select value={opportunityContactName} onChange={event=>setOpportunityContactName(event.target.value)} disabled={!opportunityContacts.length}><option value="">{opportunityContacts.length?"Select client contact...":"No contacts linked to this client"}</option>{opportunityContacts.map(contact=><option key={contact.id} value={contact.name}>{contact.name}</option>)}</select></label>
-              <label>Mobile #<input value={opportunityContact?.phone||""} readOnly/></label><label>Email<input type="email" value={opportunityContact?.email||""} readOnly/></label><label>Region<input value={opportunityContact?.region||""} readOnly/></label><label>Location<input value={opportunityContact?.location||""} readOnly/></label>
-              <label>Opportunity Type<select defaultValue={editingCustomer?.details?.opportunityType||""}><option value="">Select...</option>{selectValues("Opportunity Type").map(value=><option key={value}>{value}</option>)}</select></label><label>Project Name<input defaultValue={editingCustomer?.name||""}/></label><label>Client Inquiry Status<select defaultValue={editingCustomer?.status||"On Hand"}><option>On Hand</option><option>Bidding</option><option>Proposal</option><option>Negotiation</option><option>Secured</option></select></label><label>Document Type<select defaultValue={editingCustomer?.details?.documentType||"Offer"}><option>Inquiry</option><option>Offer</option><option>Order</option><option>Secured</option></select></label><label>Employee<select defaultValue={editingCustomer?.owner||employeeRows[0]?.name||""}>{employeeRows.map(employee=><option key={employee.id}>{employee.name}</option>)}</select></label><label>Year<input type="number" defaultValue={new Date().getFullYear()}/></label>
+              <label>Client<select value={opportunityClientName} onChange={event => { setOpportunityClientContext(event.target.value); setOpportunityContactName(""); }}><option value="">Select...</option>{customerRows.map(client => <option key={client.id}>{client.name}</option>)}</select></label>
+              <label>Contact Person<select value={opportunityContactName} onChange={event => setOpportunityContactName(event.target.value)} disabled={!opportunityContacts.length}><option value="">{opportunityContacts.length ? "Select client contact..." : "No contacts linked to this client"}</option>{opportunityContacts.map(contact => <option key={contact.id} value={contact.name}>{contact.name}</option>)}</select></label>
+              <label>Mobile #<input value={opportunityContact?.phone || ""} readOnly/></label><label>Email<input type="email" value={opportunityContact?.email || ""} readOnly/></label><label>Region<input value={opportunityContact?.region || ""} readOnly/></label><label>Location<input value={opportunityContact?.location || ""} readOnly/></label>
+              <label>Opportunity Type<select defaultValue={editingCustomer?.details?.opportunityType || ""}><option value="">Select...</option>{selectValues("Opportunity Type").map(value => <option key={value}>{value}</option>)}</select></label><label>Project Name<input defaultValue={editingCustomer?.name || ""}/></label><label>Client Inquiry Status<select defaultValue={editingCustomer?.status || "On Hand"}><option>On Hand</option><option>Bidding</option><option>Followup</option><option>Won</option><option>Secured</option></select></label><label>Document Type<select defaultValue={editingCustomer?.details?.documentType || "Offer"}><option>Inquiry</option><option>Offer</option><option>Order</option><option>Secured</option></select></label><label>Employee<select defaultValue={editingCustomer?.owner || employeeRows[0]?.name || ""}>{employeeRows.map(employee => <option key={employee.id}>{employee.name}</option>)}</select></label><label>Year<input type="number" defaultValue={new Date().getFullYear()}/></label>
             </div></fieldset>
-            <nav className="opportunity-section-tabs reference-tabs" aria-label="Opportunity form pages"><button type="button" className={opportunitySection==="Inquiry Information"?"active":""} onClick={()=>setOpportunitySection("Inquiry Information")}>Inquiry Information</button>{projectWon&&<button type="button" className={opportunitySection==="Project"?"active":""} onClick={()=>setOpportunitySection("Project")}>Project</button>}<button type="button" className={opportunitySection==="History"?"active":""} onClick={()=>setOpportunitySection("History")}>History</button></nav>
-            {opportunitySection==="Inquiry Information"?<div className="opportunity-section-grid reference-opportunity-grid"><fieldset><legend>Inquiry Details</legend><div className="drawer-field-grid"><label>Inquiry No / RFQ No<input defaultValue={editingCustomer?.id||""}/></label><label>Inquiry Date<input type="date"/></label><label>End User<input defaultValue={editingCustomer?.account||""}/></label><label>How Found Type<select><option>Current Client</option><option>Referral</option><option>Website</option><option>Consultant</option></select></label><label>Consultant<input/></label><label>Inquiry Submission Date<input type="date"/></label><label className="contact-notes">Scope of Work<textarea/></label></div></fieldset><fieldset><legend>Principle Information</legend><div className="drawer-field-grid"><label>Principle / Supplier Name<select><option value="">Select supplier...</option>{supplierNames.map(name=><option key={name}>{name}</option>)}</select></label><label>Supplier Offer #<input/></label><label>Supplier Offer Date<input type="date"/></label><label>Currency<select><option>SAR</option><option>USD</option><option>EUR</option></select></label><label>Supplier Total<input defaultValue={editingCustomer?.value||""}/></label></div></fieldset><fieldset><legend>Offer Information</legend><div className="drawer-field-grid"><label>Offer #<input defaultValue={editingCustomer?.id||""}/></label><label>Offer Date<input type="date"/></label><label>Submittal Date<input type="date"/></label><label>Currency<select><option>SAR</option><option>USD</option><option>EUR</option></select></label><label>TPS Offer<input defaultValue={editingCustomer?.value||""}/></label></div></fieldset><fieldset><legend>Link Information</legend><div className="drawer-field-grid"><label>Folder<input placeholder="Shared folder or document link"/></label><label>Project Milestone<textarea/></label></div></fieldset></div>:opportunitySection==="Project"?<section className="project-status-page"><div className="project-stage-card"><div><span className="project-eyebrow">PROJECT STATUS</span><h3>{editingCustomer?.name||"New project"}</h3><p>{opportunityClientName} · {editingCustomer?.id?.replace("OPP-","PRJ-")||"New project"}</p></div><div className="project-progress-ring" style={{background:`conic-gradient(#0f62fe ${projectProgress}%, #e0e0e0 0)`}}><span>{projectProgress}%<small>complete</small></span></div></div><div className="project-stage-track" aria-label="Project lifecycle">{["Won","Planning","Execution","Delivery","Complete"].map((stage,index)=>{const current=Math.min(4,projectStatus==="Completed"?4:projectStatus==="In progress"?2:projectStatus==="On hold"?1:1);return <div key={stage} className={index<current?"done":index===current?"current":""}><i>{index<current?"✓":index+1}</i><span>{stage}</span></div>})}</div><div className="project-health-grid"><article><span>STATUS</span><strong className={`project-health ${projectStatus.toLowerCase().replace(" ","-")}`}>{projectStatus}</strong><small>Current delivery state</small></article><article><span>OWNER</span><strong>{editingCustomer?.owner||employeeRows[0]?.name||"Unassigned"}</strong><small>Accountable team member</small></article><article><span>VALUE</span><strong>{editingCustomer?.value||"—"}</strong><small>Won opportunity value</small></article><article><span>CLIENT</span><strong>{opportunityClientName||"—"}</strong><small>Project stakeholder</small></article></div><fieldset className="opportunity-project-page"><legend>Project control</legend><div className="drawer-field-grid"><label>Project ID<input defaultValue={editingCustomer?.id?.replace("OPP-","PRJ-")||"New"}/></label><label>Project Name<input defaultValue={editingCustomer?.name||""}/></label><label>Project Owner<select defaultValue={editingCustomer?.owner||employeeRows[0]?.name||""}>{employeeRows.map(employee=><option key={employee.id}>{employee.name}</option>)}</select></label><label>Status<select value={projectStatus} onChange={event=>setProjectStatus(event.target.value)}><option>New</option><option>In progress</option><option>On hold</option><option>Completed</option></select></label><label>Progress: {projectProgress}%<input className="project-progress-input" type="range" min="0" max="100" step="5" value={projectProgress} onChange={event=>setProjectProgress(Number(event.target.value))}/></label><label>Start Date<input type="date"/></label><label>Estimated End Date<input type="date"/></label><label>Opportunity Value<input value={editingCustomer?.value||""} readOnly/></label></div></fieldset></section>:<fieldset className="opportunity-history-page"><legend>History</legend><div className="drawer-field-grid"><label>Comments<div className="history-comment-entry"><textarea value={opportunityComment} onChange={event=>setOpportunityComment(event.target.value)} placeholder="Enter a comment for History"/><button type="button" onClick={addOpportunityComment}>Add to history</button></div></label><label>Comment Date<input value={new Date().toLocaleString()} readOnly/></label><label className="contact-notes">History<textarea className="history-field" readOnly value={(opportunityHistory[editingCustomer?.id||""]||[]).join("\n")}/></label><label>Contact Person<select value={opportunityContactName} onChange={event=>setOpportunityContactName(event.target.value)} disabled={!opportunityContacts.length}><option value="">{opportunityContacts.length?"Select client contact...":"No contacts linked to this client"}</option>{opportunityContacts.map(contact=><option key={contact.id} value={contact.name}>{contact.name}</option>)}</select></label><label>Mobile #<input value={opportunityContact?.phone||""} readOnly/></label><label>Email<input type="email" value={opportunityContact?.email||""} readOnly/></label><label className="project-won-option">Project Won<input type="radio" name="project-won" value="won" checked={projectWon} disabled={projectTransferBusy} onChange={transferOpportunityToProject}/></label><label>Attachments<input/></label></div></fieldset>}
-          </>:active === "Customers" && customerPage === "Contacts" ? <MultiContacts key={`${editingCustomer?.id||"new"}-${contactListRows.length}`} contacts={contactListRows.filter(contact=>contact.account===editingCustomer?.name)} onDelete={async contact=>{if(!window.confirm(`Delete ${contact.name} from this client's contact list?`))return;try{await deleteSupabaseRow("contacts","contact_code",contact.id);setContactListRows(rows=>rows.filter(row=>row.id!==contact.id));announce(`${contact.name} deleted`)}catch(error:any){announce(`Delete failed: ${error.message}`)}}} /> : drawerGroups?.map(([title,fields]: [string,string[]])=><fieldset key={title}><legend>{title}</legend><div className="drawer-field-grid">{fields.map(field=><label key={field}>{field}{field.includes("Notes")||field.includes("Scope")||field.includes("History")||field.includes("Comments")||field.includes("Milestone")?<textarea defaultValue={customerFieldValue(field,editingCustomer,active)}/>:field.includes("Date")||field.includes("Due")?<input type="date"/>:field.includes("Status")||field.includes("Type")||field.includes("Category")||field.includes("Currency")||field.includes("Handled")||field.includes("Assigned To")||field.includes("Responsible")||field==="Employee"||field==="Client"||field==="Equipment"?<select defaultValue={customerFieldValue(field,editingCustomer,active)}><option value="">Select...</option>{(field==="Client"?[...records.Customers.map(client=>client.name),"Add / modify clients..."]:field==="Equipment"?equipmentValues:(field.includes("Handled")||field.includes("Assigned To")||field.includes("Responsible")||field==="Employee"?employeeRows.map(employee=>employee.name):selectValues(field,active))).map(value=><option key={value}>{value}</option>)}</select>:field.includes("FLAG")||field==="Submitted"||field==="Closed"||field==="Done"?<input type="checkbox"/>:<input defaultValue={customerFieldValue(field,editingCustomer,active)} placeholder={field}/>}</label>)}</div></fieldset>)}
-          {!(active==="Customers"&&!['General','Contacts'].includes(customerPage))&&<div className="form-actions"><button type="button" onClick={() => setDrawer(false)}>Cancel</button><button type="submit">{editingCustomer?`Save ${actionName} changes`:`Create ${actionName}`}</button></div>}
+            <nav className="opportunity-section-tabs reference-tabs" aria-label="Opportunity form pages"><button type="button" className={opportunitySection === "Inquiry Information" ? "active" : ""} onClick={() => setOpportunitySection("Inquiry Information")}>Inquiry Information</button>{projectWon && <button type="button" className={opportunitySection === "Project" ? "active" : ""} onClick={() => setOpportunitySection("Project")}>Project</button>}<button type="button" className={opportunitySection === "History" ? "active" : ""} onClick={() => setOpportunitySection("History")}>History</button></nav>
+            {opportunitySection === "Inquiry Information" ? <div className="opportunity-section-grid reference-opportunity-grid"><fieldset><legend>Inquiry Details</legend><div className="drawer-field-grid"><label>Inquiry No / RFQ No<input defaultValue={editingCustomer?.id || ""}/></label><label>Inquiry Date<input type="date"/></label><label>End User<input defaultValue={editingCustomer?.account || ""}/></label><label>How Found Type<select><option>Current Client</option><option>Referral</option><option>Website</option><option>Consultant</option></select></label><label>Consultant<input /></label><label>Inquiry Submission Date<input type="date"/></label><label className="contact-notes">Scope of Work<textarea /></label></div></fieldset><fieldset><legend>Principle Information</legend><div className="drawer-field-grid"><label>Principle / Supplier Name<select><option value="">Select supplier...</option>{supplierNames.map(name => <option key={name}>{name}</option>)}</select></label><label>Supplier Offer #<input /></label><label>Supplier Offer Date<input type="date"/></label><label>Currency<select><option>SAR</option><option>USD</option><option>EUR</option></select></label><label>Supplier Total<input defaultValue={editingCustomer?.value || ""}/></label></div></fieldset><fieldset><legend>Offer Information</legend><div className="drawer-field-grid"><label>Offer #<input defaultValue={editingCustomer?.id || ""}/></label><label>Offer Date<input type="date"/></label><label>Submittal Date<input type="date"/></label><label>Currency<select><option>SAR</option><option>USD</option><option>EUR</option></select></label><label>TPS Offer<input defaultValue={editingCustomer?.value || ""}/></label></div></fieldset><fieldset><legend>Link Information</legend><div className="drawer-field-grid"><label>Folder<input placeholder="Shared folder or document link"/></label><label>Project Milestone<textarea /></label></div></fieldset></div> : opportunitySection === "Project" ? <section className="project-status-page"><div className="project-stage-card"><div><span className="project-eyebrow">PROJECT STATUS</span><h3>{editingCustomer?.name || "New project"}</h3><p>{opportunityClientName} · {editingCustomer?.id?.replace("OPP-", "PRJ-") || "New project"}</p></div><div className="project-progress-ring" style={{ background: `conic-gradient(#0f62fe ${projectProgress}%, #e0e0e0 0)` }}><span>{projectProgress}%<small>complete</small></span></div></div><div className="project-stage-track" aria-label="Project lifecycle">{["Won", "Planning", "Execution", "Delivery", "Complete"].map((stage, index) => { const current = Math.min(4, projectStatus === "Completed" ? 4 : projectStatus === "In progress" ? 2 : projectStatus === "On hold" ? 1 : 1); return <div key={stage} className={index < current ? "done" : index === current ? "current" : ""}><i>{index < current ? "✓" : index + 1}</i><span>{stage}</span></div>; })}</div><div className="project-health-grid"><article><span>STATUS</span><strong className={`project-health ${projectStatus.toLowerCase().replace(" ", "-")}`}>{projectStatus}</strong><small>Current delivery state</small></article><article><span>OWNER</span><strong>{editingCustomer?.owner || employeeRows[0]?.name || "Unassigned"}</strong><small>Accountable team member</small></article><article><span>VALUE</span><strong>{editingCustomer?.value || "—"}</strong><small>Won opportunity value</small></article><article><span>CLIENT</span><strong>{opportunityClientName || "—"}</strong><small>Project stakeholder</small></article></div><fieldset className="opportunity-project-page"><legend>Project control</legend><div className="drawer-field-grid"><label>Project ID<input defaultValue={editingCustomer?.id?.replace("OPP-", "PRJ-") || "New"}/></label><label>Project Name<input defaultValue={editingCustomer?.name || ""}/></label><label>Project Owner<select defaultValue={editingCustomer?.owner || employeeRows[0]?.name || ""}>{employeeRows.map(employee => <option key={employee.id}>{employee.name}</option>)}</select></label><label>Status<select value={projectStatus} onChange={event => setProjectStatus(event.target.value)}><option>New</option><option>In progress</option><option>On hold</option><option>Completed</option></select></label><label>Progress: {projectProgress}%<input className="project-progress-input" type="range" min="0" max="100" step="5" value={projectProgress} onChange={event => setProjectProgress(Number(event.target.value))}/></label><label>Start Date<input type="date"/></label><label>Estimated End Date<input type="date"/></label><label>Opportunity Value<input value={editingCustomer?.value || ""} readOnly/></label></div></fieldset></section> : <fieldset className="opportunity-history-page"><legend>History</legend><div className="drawer-field-grid"><label>Comments<div className="history-comment-entry"><textarea value={opportunityComment} onChange={event => setOpportunityComment(event.target.value)} placeholder="Enter a comment for History"/><button type="button" onClick={addOpportunityComment}>Add to history</button></div></label><label>Comment Date<input value={new Date().toLocaleString()} readOnly/></label><label className="contact-notes">History<textarea className="history-field" readOnly value={(opportunityHistory[editingCustomer?.id || ""] || []).join("\n")}/></label><label>Contact Person<select value={opportunityContactName} onChange={event => setOpportunityContactName(event.target.value)} disabled={!opportunityContacts.length}><option value="">{opportunityContacts.length ? "Select client contact..." : "No contacts linked to this client"}</option>{opportunityContacts.map(contact => <option key={contact.id} value={contact.name}>{contact.name}</option>)}</select></label><label>Mobile #<input value={opportunityContact?.phone || ""} readOnly/></label><label>Email<input type="email" value={opportunityContact?.email || ""} readOnly/></label><label className="project-won-option">Project Won<input type="radio" name="project-won" value="won" checked={projectWon} disabled={projectTransferBusy} onChange={transferOpportunityToProject}/></label><label>Attachments<input /></label></div></fieldset>}
+          </> : active === "Customers" && customerPage === "Contacts" ? <MultiContacts key={`${editingCustomer?.id || "new"}-${contactListRows.length}`} contacts={contactListRows.filter(contact => contact.account === editingCustomer?.name)} onDelete={async (contact) => { if (!window.confirm(`Delete ${contact.name} from this client's contact list?`))
+                return; try {
+                await deleteSupabaseRow("contacts", "contact_code", contact.id);
+                setContactListRows(rows => rows.filter(row => row.id !== contact.id));
+                announce(`${contact.name} deleted`);
+            }
+            catch (error: any) {
+                announce(`Delete failed: ${error.message}`);
+            } }}/> : drawerGroups?.map(([title, fields]: [
+                string,
+                string[]
+            ]) => <fieldset key={title}><legend>{title}</legend><div className="drawer-field-grid">{fields.map(field => <label key={field}>{field}{field.includes("Notes") || field.includes("Scope") || field.includes("History") || field.includes("Comments") || field.includes("Milestone") ? <textarea defaultValue={customerFieldValue(field, editingCustomer, active)}/> : field.includes("Date") || field.includes("Due") ? <input type="date"/> : field.includes("Status") || field.includes("Type") || field.includes("Category") || field.includes("Currency") || field.includes("Handled") || field.includes("Assigned To") || field.includes("Responsible") || field === "Employee" || field === "Client" || field === "Equipment" ? <select defaultValue={customerFieldValue(field, editingCustomer, active)}><option value="">Select...</option>{(field === "Client" ? [...records.Customers.map(client => client.name), "Add / modify clients..."] : field === "Equipment" ? equipmentValues : (field.includes("Handled") || field.includes("Assigned To") || field.includes("Responsible") || field === "Employee" ? employeeRows.map(employee => employee.name) : selectValues(field, active))).map(value => <option key={value}>{value}</option>)}</select> : field.includes("FLAG") || field === "Submitted" || field === "Closed" || field === "Done" ? <input type="checkbox"/> : <input defaultValue={customerFieldValue(field, editingCustomer, active)} placeholder={field}/>}</label>)}</div></fieldset>)}
+          {!(active === "Customers" && !['General', 'Contacts'].includes(customerPage)) && <div className="form-actions"><button type="button" onClick={() => setDrawer(false)}>Cancel</button><button type="submit">{editingCustomer ? `Save ${actionName} changes` : `Create ${actionName}`}</button></div>}
         </form>
       </aside>
     </div>}
     {notice && <div className="toast" role="status">Done - {notice}</div>}
   </main>;
 }
-
-function MultiContacts({contacts,onDelete}:{contacts:Row[],onDelete:(contact:{id:string,name:string})=>void}) {
-  const contactData=contacts.map(contact=>({id:contact.id,name:contact.name,job:contact.value||"",department:contact.owner||"",phone:contact.phone||"",email:contact.email||"",role:contact.status||"Primary"}));
-  const [selected,setSelected]=useState<(typeof contactData)[number]|null>(null);
-  const [isNew,setIsNew]=useState(false);
-  if(selected||isNew){const contact=selected;return <section className="contact-detail"><div className="related-head"><div><button type="button" className="back-link" onClick={()=>{setSelected(null);setIsNew(false)}}>&lt;- Contact list</button><h3>{isNew?"New contact":contact?.name}</h3></div></div><fieldset><legend>Contact details</legend><div className="drawer-field-grid"><label>First Name<input defaultValue={contact?.name.split(" ")[0]||""}/></label><label>Last Name<input defaultValue={contact?.name.split(" ").slice(1).join(" ")||""}/></label><label>Job Title<input defaultValue={contact?.job||""}/></label><label>Department<input defaultValue={contact?.department||""}/></label><label>Business Phone<input defaultValue={contact?.phone||""}/></label><label>Mobile Phone<input defaultValue={contact?.phone||""}/></label><label>E-mail Address<input type="email" defaultValue={contact?.email||""}/></label><label>Role<select defaultValue={contact?.role||"Primary"}><option>Primary</option><option>Commercial</option><option>Technical</option><option>Finance</option></select></label><label className="contact-notes">Notes<textarea/></label></div></fieldset></section>}
-  return <section className="related-list"><div className="related-head"><div><h3>Contact list</h3><p>{contactData.length} contacts linked to this client</p></div><button type="button" onClick={()=>setIsNew(true)}>+ New contact</button></div><div className="table-scroll"><table><thead><tr><th>Contact</th><th>Job title</th><th>Department</th><th>Mobile phone</th><th>Email</th><th>Role</th><th></th></tr></thead><tbody>{contactData.map(contact=><tr key={contact.id} className="record-row" onClick={()=>setSelected(contact)}><td><strong>{contact.name}</strong></td><td>{contact.job}</td><td>{contact.department}</td><td>{contact.phone}</td><td>{contact.email}</td><td><span className="status-pill neutral">{contact.role}</span></td><td><div className="row-actions"><button type="button" className="open-record" onClick={e=>{e.stopPropagation();setSelected(contact)}}>View</button><button type="button" className="delete-record" onClick={e=>{e.stopPropagation();onDelete(contact)}}>Del</button></div></td></tr>)}</tbody></table></div></section>;
+function MultiContacts({ contacts, onDelete }: {
+    contacts: Row[];
+    onDelete: (contact: {
+        id: string;
+        name: string;
+    }) => void;
+}) {
+    const contactData = contacts.map(contact => ({ id: contact.id, name: contact.name, job: contact.value || "", department: contact.owner || "", phone: contact.phone || "", email: contact.email || "", role: contact.status || "Primary" }));
+    const [selected, setSelected] = useState<(typeof contactData)[number] | null>(null);
+    const [isNew, setIsNew] = useState(false);
+    if (selected || isNew) {
+        const contact = selected;
+        return <section className="contact-detail"><div className="related-head"><div><button type="button" className="back-link" onClick={() => { setSelected(null); setIsNew(false); }}>&lt;- Contact list</button><h3>{isNew ? "New contact" : contact?.name}</h3></div></div><fieldset><legend>Contact details</legend><div className="drawer-field-grid"><label>First Name<input defaultValue={contact?.name.split(" ")[0] || ""}/></label><label>Last Name<input defaultValue={contact?.name.split(" ").slice(1).join(" ") || ""}/></label><label>Job Title<input defaultValue={contact?.job || ""}/></label><label>Department<input defaultValue={contact?.department || ""}/></label><label>Business Phone<input defaultValue={contact?.phone || ""}/></label><label>Mobile Phone<input defaultValue={contact?.phone || ""}/></label><label>E-mail Address<input type="email" defaultValue={contact?.email || ""}/></label><label>Role<select defaultValue={contact?.role || "Primary"}><option>Primary</option><option>Commercial</option><option>Technical</option><option>Finance</option></select></label><label className="contact-notes">Notes<textarea /></label></div></fieldset></section>;
+    }
+    return <section className="related-list"><div className="related-head"><div><h3>Contact list</h3><p>{contactData.length} contacts linked to this client</p></div><button type="button" onClick={() => setIsNew(true)}>+ New contact</button></div><div className="table-scroll"><table><thead><tr><th>Contact</th><th>Job title</th><th>Department</th><th>Mobile phone</th><th>Email</th><th>Role</th><th></th></tr></thead><tbody>{contactData.map(contact => <tr key={contact.id} className="record-row" onClick={() => setSelected(contact)}><td><strong>{contact.name}</strong></td><td>{contact.job}</td><td>{contact.department}</td><td>{contact.phone}</td><td>{contact.email}</td><td><span className="status-pill neutral">{contact.role}</span></td><td><div className="row-actions"><button type="button" className="open-record" onClick={e => { e.stopPropagation(); setSelected(contact); }}>View</button><button type="button" className="delete-record" onClick={e => { e.stopPropagation(); onDelete(contact); }}>Del</button></div></td></tr>)}</tbody></table></div></section>;
 }
-
-
-function CustomerQuotationList({customer,contacts,announce,employees,items,setItems,onWon,onOpenWorkspaceOpportunity}:{customer:Row|null,contacts:Row[],announce:(message:string)=>void,employees:Row[],items:Row[],setItems:Dispatch<SetStateAction<Row[]>>,onWon:(project:WonProject)=>void,onOpenWorkspaceOpportunity:(opportunity:Row|null)=>void}) {
-  const [selected,setSelected]=useState<Row|null>(null);const [isNew,setIsNew]=useState(false);const [detailView,setDetailView]=useState<"Inquiry Information"|"History">("Inquiry Information");const [historyById,setHistoryById]=useState<Record<string,string[]>>({});const nameRef=useRef<HTMLInputElement>(null);const valueRef=useRef<HTMLInputElement>(null);const ownerRef=useRef<HTMLSelectElement>(null);const noteRef=useRef<HTMLTextAreaElement>(null);
-  const [listFilter,setListFilter]=useState("All statuses");
-  const customerItems=items.filter(item=>item.account===customer?.name);
-  const fallbackContact=customer?.account&&customer.account!=="No primary contact"&&!/^[+\d]/.test(customer.account)?[{client:customer.name,name:customer.account,phone:"",region:"",location:""}]:[];
-  const contactOptions=[...clientContactDetails.filter(contact=>contact.client===customer?.name),...contacts.filter(contact=>contact.account===customer?.name).map(contact=>({client:contact.account,name:contact.name,phone:contact.phone||"",region:contact.region||"",location:contact.location||""})),...fallbackContact].filter((contact,index,list)=>list.findIndex(item=>item.name===contact.name)===index);
-  const [contactName,setContactName]=useState(contactOptions[0]?.name||"");
-  const primaryContact=contactOptions.find(contact=>contact.name===contactName);
-  const save=async()=>{
-    const name=nameRef.current?.value.trim();
-    if(!name){announce("Project Name is required");return;}
-    if(!customer?.name){announce("Choose a client before saving the opportunity");return;}
-    const statusLabel=Array.from(document.querySelectorAll("label")).find(label=>label.childNodes[0]?.textContent?.trim()==="Client Inquiry Status");
-    const status=(statusLabel?.querySelector("select") as HTMLSelectElement|null)?.value||selected?.status||"On Hand";
-    const item:Row={id:selected?.id||`OPP-${Date.now().toString().slice(-6)}`,name,account:customer.name,value:valueRef.current?.value.trim()||selected?.value||"$0",status,owner:ownerRef.current?.value||selected?.owner||"Alex Morgan",date:new Date().toLocaleDateString()};
-    const note=noteRef.current?.value.trim()||"";
-    try{
-      if(!supabase)throw new Error("Supabase is not configured");
-      const {data:client,error:clientError}=await supabase.from("clients").select("id").eq("client_code",customer.id).limit(1).maybeSingle();
-      if(clientError)throw clientError;
-      if(!client?.id)throw new Error("The selected client is not stored in the database");
-      const saved:any=await upsertSupabaseRow("opportunities",{opportunity_code:item.id,project_name:item.name,client_id:client.id,owner_name:item.owner,inquiry_status:item.status,status:"Active",document_type:"Inquiry",value:parseMoney(item.value),currency:"SAR",notes:note||null},"opportunity_code");
-      if(note)await insertSupabaseRow("opportunity_history",{opportunity_id:saved.id,note});
-      const historyEntry=`${new Date(saved.updated_at||Date.now()).toLocaleString()} — ${selected?"Updated":"Created"}: ${item.name}; status ${item.status}; value ${item.value}; handled by ${item.owner}${note?`; note: ${note}`:""}`;
-      setHistoryById(history=>({...history,[item.id]:[historyEntry,...(history[item.id]||[])]}));
-      if(status==="Secured")onWon({id:item.id.replace(/^QUO|^OPP/,"PRJ"),customerId:customer.id,name:item.name,type:"Opportunity conversion",status:"New",progress:"0%",start:new Date().toLocaleDateString(),due:"To be scheduled"});
-      setItems(rows=>selected?rows.map(row=>row.id===selected.id?item:row):[item,...rows]);
-      setSelected(null);setIsNew(false);
-      announce(note?"Opportunity and history saved to the database":"Opportunity saved to the database");
-    }catch(error:any){announce(`Save failed: ${error.message}`);}
-  };
-  const addNoteToHistory=()=>{const note=noteRef.current?.value.trim()||"";if(!note){announce("Enter a note first");return;}if(!selected?.id){announce("Save the opportunity before adding history notes");return;}const entry=`${new Date().toLocaleString()} — Note: ${note}`;setHistoryById(history=>({...history,[selected.id]:[entry,...(history[selected.id]||[])]}));if(noteRef.current)noteRef.current.value="";announce("Note added to History with date and time")};
-  if(selected||isNew)return <section className="contact-detail opportunity-access"><div className="related-head"><div><button type="button" className="back-link" onClick={()=>{setSelected(null);setIsNew(false)}}>&lt;- Opportunity list</button><h3>{isNew?"New opportunity":selected?.name}</h3></div><button type="button" onClick={save}>Save Opportunities</button></div>
-    <fieldset><legend>Inquiry</legend><div className="drawer-field-grid"><label>OpportunityID<input defaultValue={selected?.id||""}/></label><label>Document Type<select defaultValue=""><option value="">Select...</option><option>Case</option><option>Case Solved</option><option>Delivered</option><option>Inquiry</option><option>Letter</option><option>Offer</option><option>Order</option><option>Task</option><option>Secured</option></select></label><label>Inquiry No / RFQ No<input defaultValue={selected?.id||""}/></label><label>Scope Note<textarea/></label><label>Inquiry Date<input type="date"/></label><label>Inquiry Submission Date<input type="date"/></label><label>Submitted<input type="checkbox"/></label><label>Project Name<input defaultValue={selected?.name||""}/></label><label>Opportunity Type<select defaultValue=""><option value="">Select...</option>{selectValues("Opportunity Type").map(value=><option key={value}>{value}</option>)}</select></label><label>Year<input type="number" defaultValue={new Date().getFullYear()}/></label></div></fieldset>
-    <fieldset><legend>Client</legend><div className="drawer-field-grid"><label>Client<input value={customer?.name||selected?.account||""} readOnly/></label><label>Contact Person<select value={contactName} onChange={event=>setContactName(event.target.value)} disabled={!contactOptions.length}><option value="">{contactOptions.length?"Select contact person...":"No contacts linked to this client"}</option>{contactOptions.map(contact=><option key={contact.name} value={contact.name}>{contact.name}</option>)}</select></label><label>Telephone<input value={primaryContact?.phone||""} readOnly/></label><label>Region<input value={primaryContact?.region||""} readOnly/></label><label>Location<input value={primaryContact?.location||""} readOnly/></label><label>Consultant<input/></label><label>End User<input value={customer?.name||selected?.account||""} readOnly/></label><label>Client Inquiry Status<select defaultValue={selected?.status||"On Hand"}><option>On Hand</option><option>Bidding</option><option>Proposal</option><option>Negotiation</option><option>Secured</option></select></label></div></fieldset>
-    <fieldset><legend>Ownership &amp; status</legend><div className="drawer-field-grid"><label>Employee<select defaultValue={selected?.owner||employees[0]?.name||""}>{employees.map(employee=><option key={employee.id}>{employee.name}</option>)}</select></label><label>How Found Type<select defaultValue="Current Client"><option>Current Client</option><option>Referral</option><option>Website</option><option>Tender Portal</option><option>Consultant</option><option>Other</option></select></label><label>Closed<input type="checkbox"/></label><label>Status of Call<select defaultValue="Active"><option>Active</option><option>Pending</option><option>Completed</option><option>Closed</option></select></label><label>Last Call Date<input type="date"/></label><label>Next Call Date<input type="date"/></label><label>Proposal Status<select defaultValue={selected?.status||"Active"}><option>Active</option><option>Pending</option><option>Completed</option></select></label><label>Client Project Status<select defaultValue="New"><option>New</option><option>In progress</option><option>On hold</option><option>Completed</option><option>Cancelled</option></select></label></div></fieldset>
-    <fieldset><legend>Opportunity details</legend><div className="drawer-field-grid opportunity-summary"><label>Client / Supplier<select defaultValue={customer?.name||""}><option>{customer?.name||"Current client"}</option>{supplierNames.map(name=><option key={name}>{name}</option>)}</select></label><label>Type<select defaultValue=""><option value="">Choose...</option><option>Spare Parts</option><option>Canal Water</option><option>Grey Water</option><option>Sanitary Waste Water Plant</option><option>Desilination Plant</option><option>DAMS &amp; RAINWATER PLANTS</option><option>Others</option></select></label><label>Project Name<input ref={nameRef} defaultValue={selected?.name||""}/></label><label>Client Inquiry Status<select defaultValue={selected?.status||"On Hand"}><option>On Hand</option><option>Bidding</option><option>Proposal</option><option>Negotiation</option><option>Secured</option></select></label><label>Document Type<select defaultValue=""><option value="">Choose...</option><option>Case</option><option>Case Solved</option><option>Delivered</option><option>Inquiry</option><option>Letter</option><option>Offer</option><option>Order</option><option>Task</option><option>Secured</option></select></label><label>Handled by<select ref={ownerRef} defaultValue={selected?.owner||employees[0]?.name||""}>{employees.map(employee=><option key={employee.id}>{employee.name}</option>)}</select></label><label>Year<input type="number" defaultValue={new Date().getFullYear()}/></label></div></fieldset>
+function CustomerQuotationList({ customer, contacts, announce, employees, items, setItems, onWon, onOpenWorkspaceOpportunity }: {
+    customer: Row | null;
+    contacts: Row[];
+    announce: (message: string) => void;
+    employees: Row[];
+    items: Row[];
+    setItems: Dispatch<SetStateAction<Row[]>>;
+    onWon: (project: WonProject) => void;
+    onOpenWorkspaceOpportunity: (opportunity: Row | null) => void;
+}) {
+    const [selected, setSelected] = useState<Row | null>(null);
+    const [isNew, setIsNew] = useState(false);
+    const [detailView, setDetailView] = useState<"Inquiry Information" | "History">("Inquiry Information");
+    const [historyById, setHistoryById] = useState<Record<string, string[]>>({});
+    const nameRef = useRef<HTMLInputElement>(null);
+    const valueRef = useRef<HTMLInputElement>(null);
+    const ownerRef = useRef<HTMLSelectElement>(null);
+    const noteRef = useRef<HTMLTextAreaElement>(null);
+    const [listFilter, setListFilter] = useState("All statuses");
+    const customerItems = items.filter(item => item.account === customer?.name);
+    const fallbackContact = customer?.account && customer.account !== "No primary contact" && !/^[+\d]/.test(customer.account) ? [{ client: customer.name, name: customer.account, phone: "", region: "", location: "" }] : [];
+    const contactOptions = [...clientContactDetails.filter(contact => contact.client === customer?.name), ...contacts.filter(contact => contact.account === customer?.name).map(contact => ({ client: contact.account, name: contact.name, phone: contact.phone || "", region: contact.region || "", location: contact.location || "" })), ...fallbackContact].filter((contact, index, list) => list.findIndex(item => item.name === contact.name) === index);
+    const [contactName, setContactName] = useState(contactOptions[0]?.name || "");
+    const primaryContact = contactOptions.find(contact => contact.name === contactName);
+    const save = async () => {
+        const name = nameRef.current?.value.trim();
+        if (!name) {
+            announce("Project Name is required");
+            return;
+        }
+        if (!customer?.name) {
+            announce("Choose a client before saving the opportunity");
+            return;
+        }
+        const statusLabel = Array.from(document.querySelectorAll("label")).find(label => label.childNodes[0]?.textContent?.trim() === "Client Inquiry Status");
+        const status = (statusLabel?.querySelector("select") as HTMLSelectElement | null)?.value || selected?.status || "On Hand";
+        const item: Row = { id: selected?.id || `OPP-${Date.now().toString().slice(-6)}`, name, account: customer.name, value: valueRef.current?.value.trim() || selected?.value || "$0", status, owner: ownerRef.current?.value || selected?.owner || "Alex Morgan", date: new Date().toLocaleDateString() };
+        const note = noteRef.current?.value.trim() || "";
+        try {
+            if (!supabase)
+                throw new Error("Supabase is not configured");
+            const { data: client, error: clientError } = await supabase.from("clients").select("id").eq("client_code", customer.id).limit(1).maybeSingle();
+            if (clientError)
+                throw clientError;
+            if (!client?.id)
+                throw new Error("The selected client is not stored in the database");
+            const saved: any = await upsertSupabaseRow("opportunities", { opportunity_code: item.id, project_name: item.name, client_id: client.id, owner_name: item.owner, inquiry_status: item.status, status: "Active", document_type: "Inquiry", value: parseMoney(item.value), currency: "SAR", notes: note || null }, "opportunity_code");
+            if (note)
+                await insertSupabaseRow("opportunity_history", { opportunity_id: saved.id, note });
+            const historyEntry = `${new Date(saved.updated_at || Date.now()).toLocaleString()} — ${selected ? "Updated" : "Created"}: ${item.name}; status ${item.status}; value ${item.value}; handled by ${item.owner}${note ? `; note: ${note}` : ""}`;
+            setHistoryById(history => ({ ...history, [item.id]: [historyEntry, ...(history[item.id] || [])] }));
+            if (status === "Secured")
+                onWon({ id: item.id.replace(/^QUO|^OPP/, "PRJ"), customerId: customer.id, name: item.name, type: "Opportunity conversion", status: "New", progress: "0%", start: new Date().toLocaleDateString(), due: "To be scheduled" });
+            setItems(rows => selected ? rows.map(row => row.id === selected.id ? item : row) : [item, ...rows]);
+            setSelected(null);
+            setIsNew(false);
+            announce(note ? "Opportunity and history saved to the database" : "Opportunity saved to the database");
+        }
+        catch (error: any) {
+            announce(`Save failed: ${error.message}`);
+        }
+    };
+    const addNoteToHistory = () => { const note = noteRef.current?.value.trim() || ""; if (!note) {
+        announce("Enter a note first");
+        return;
+    } if (!selected?.id) {
+        announce("Save the opportunity before adding history notes");
+        return;
+    } const entry = `${new Date().toLocaleString()} — Note: ${note}`; setHistoryById(history => ({ ...history, [selected.id]: [entry, ...(history[selected.id] || [])] })); if (noteRef.current)
+        noteRef.current.value = ""; announce("Note added to History with date and time"); };
+    if (selected || isNew)
+        return <section className="contact-detail opportunity-access"><div className="related-head"><div><button type="button" className="back-link" onClick={() => { setSelected(null); setIsNew(false); }}>&lt;- Opportunity list</button><h3>{isNew ? "New opportunity" : selected?.name}</h3></div><button type="button" onClick={save}>Save Opportunities</button></div>
+    <fieldset><legend>Inquiry</legend><div className="drawer-field-grid"><label>OpportunityID<input defaultValue={selected?.id || ""}/></label><label>Document Type<select defaultValue=""><option value="">Select...</option><option>Case</option><option>Case Solved</option><option>Delivered</option><option>Inquiry</option><option>Letter</option><option>Offer</option><option>Order</option><option>Task</option><option>Secured</option></select></label><label>Inquiry No / RFQ No<input defaultValue={selected?.id || ""}/></label><label>Scope Note<textarea /></label><label>Inquiry Date<input type="date"/></label><label>Inquiry Submission Date<input type="date"/></label><label>Submitted<input type="checkbox"/></label><label>Project Name<input defaultValue={selected?.name || ""}/></label><label>Opportunity Type<select defaultValue=""><option value="">Select...</option>{selectValues("Opportunity Type").map(value => <option key={value}>{value}</option>)}</select></label><label>Year<input type="number" defaultValue={new Date().getFullYear()}/></label></div></fieldset>
+    <fieldset><legend>Client</legend><div className="drawer-field-grid"><label>Client<input value={customer?.name || selected?.account || ""} readOnly/></label><label>Contact Person<select value={contactName} onChange={event => setContactName(event.target.value)} disabled={!contactOptions.length}><option value="">{contactOptions.length ? "Select contact person..." : "No contacts linked to this client"}</option>{contactOptions.map(contact => <option key={contact.name} value={contact.name}>{contact.name}</option>)}</select></label><label>Telephone<input value={primaryContact?.phone || ""} readOnly/></label><label>Region<input value={primaryContact?.region || ""} readOnly/></label><label>Location<input value={primaryContact?.location || ""} readOnly/></label><label>Consultant<input /></label><label>End User<input value={customer?.name || selected?.account || ""} readOnly/></label><label>Client Inquiry Status<select defaultValue={selected?.status || "On Hand"}><option>On Hand</option><option>Bidding</option><option>Proposal</option><option>Negotiation</option><option>Secured</option></select></label></div></fieldset>
+    <fieldset><legend>Ownership &amp; status</legend><div className="drawer-field-grid"><label>Employee<select defaultValue={selected?.owner || employees[0]?.name || ""}>{employees.map(employee => <option key={employee.id}>{employee.name}</option>)}</select></label><label>How Found Type<select defaultValue="Current Client"><option>Current Client</option><option>Referral</option><option>Website</option><option>Tender Portal</option><option>Consultant</option><option>Other</option></select></label><label>Closed<input type="checkbox"/></label><label>Status of Call<select defaultValue="Active"><option>Active</option><option>Pending</option><option>Completed</option><option>Closed</option></select></label><label>Last Call Date<input type="date"/></label><label>Next Call Date<input type="date"/></label><label>Proposal Status<select defaultValue={selected?.status || "Active"}><option>Active</option><option>Pending</option><option>Completed</option></select></label><label>Client Project Status<select defaultValue="New"><option>New</option><option>In progress</option><option>On hold</option><option>Completed</option><option>Cancelled</option></select></label></div></fieldset>
+    <fieldset><legend>Opportunity details</legend><div className="drawer-field-grid opportunity-summary"><label>Client / Supplier<select defaultValue={customer?.name || ""}><option>{customer?.name || "Current client"}</option>{supplierNames.map(name => <option key={name}>{name}</option>)}</select></label><label>Type<select defaultValue=""><option value="">Choose...</option><option>Spare Parts</option><option>Canal Water</option><option>Grey Water</option><option>Sanitary Waste Water Plant</option><option>Desilination Plant</option><option>DAMS &amp; RAINWATER PLANTS</option><option>Others</option></select></label><label>Project Name<input ref={nameRef} defaultValue={selected?.name || ""}/></label><label>Client Inquiry Status<select defaultValue={selected?.status || "On Hand"}><option>On Hand</option><option>Bidding</option><option>Proposal</option><option>Negotiation</option><option>Secured</option></select></label><label>Document Type<select defaultValue=""><option value="">Choose...</option><option>Case</option><option>Case Solved</option><option>Delivered</option><option>Inquiry</option><option>Letter</option><option>Offer</option><option>Order</option><option>Task</option><option>Secured</option></select></label><label>Handled by<select ref={ownerRef} defaultValue={selected?.owner || employees[0]?.name || ""}>{employees.map(employee => <option key={employee.id}>{employee.name}</option>)}</select></label><label>Year<input type="number" defaultValue={new Date().getFullYear()}/></label></div></fieldset>
     <fieldset className="scope-under-document"><legend>Scope of Work</legend><textarea placeholder="Enter the opportunity scope of work"/></fieldset>
-    <nav className="opportunity-subtabs"><button type="button" className={detailView==="Inquiry Information"?"active":""} onClick={()=>setDetailView("Inquiry Information")}>Inquiry Information</button><button type="button" className={detailView==="History"?"active":""} onClick={()=>setDetailView("History")}>History</button></nav>
-    {detailView==="History"?<fieldset><legend>History</legend><label className="history-note-field">Notes<textarea ref={noteRef} placeholder="Enter a note to add to History"/><button type="button" onClick={addNoteToHistory}>Add note to history</button></label><div className="opportunity-history">{(historyById[selected?.id||""]||[]).length?(historyById[selected?.id||""]||[]).map((entry,index)=><p key={`${entry}-${index}`}>{entry}</p>):<p>No history recorded yet.</p>}</div></fieldset>:<div className="opportunity-section-grid"><fieldset><legend>Inquiry Details</legend><div className="drawer-field-grid"><label>Inquiry No.<input defaultValue={selected?.id||""}/></label><label>Inquiry Date<input type="date"/></label><label>End User<input defaultValue="Private"/></label><label>How Found<select defaultValue="Current Client"><option>Current Client</option><option>Referral</option><option>Website</option><option>Tender Portal</option><option>Consultant</option><option>Other</option></select></label><label>Consultant<input/></label><label>Inquiry Submission Date<input type="date"/></label><label className="contact-notes">Scope of Work<textarea/></label></div></fieldset><fieldset><legend>Principle Information</legend><div className="drawer-field-grid"><label>Name<select defaultValue=""><option value="">Choose...</option>{supplierNames.map(name=><option key={name}>{name}</option>)}</select></label><label>Offer #<input/></label><label>Date<input type="date"/></label><label>Currency<select defaultValue="SAR"><option>SAR</option><option>USD</option><option>EUR</option></select></label><label>Total Offer<input ref={valueRef} defaultValue={selected?.value||""}/></label></div></fieldset><fieldset><legend>Offer Information</legend><div className="drawer-field-grid"><label>Offer #<input defaultValue={selected?.id||""}/></label><label>Offer Date<input type="date"/></label><label>Submission Date<input type="date"/></label><label>Currency<select defaultValue="SAR"><option>SAR</option><option>USD</option><option>EUR</option></select></label><label>Total Offer<input defaultValue={selected?.value||""}/></label></div></fieldset><fieldset><legend>Link Information</legend><div className="drawer-field-grid"><label>Folder<input placeholder="Shared folder or document link"/></label><label>Project Milestone<input/></label></div></fieldset></div>}
+    <nav className="opportunity-subtabs"><button type="button" className={detailView === "Inquiry Information" ? "active" : ""} onClick={() => setDetailView("Inquiry Information")}>Inquiry Information</button><button type="button" className={detailView === "History" ? "active" : ""} onClick={() => setDetailView("History")}>History</button></nav>
+    {detailView === "History" ? <fieldset><legend>History</legend><label className="history-note-field">Notes<textarea ref={noteRef} placeholder="Enter a note to add to History"/><button type="button" onClick={addNoteToHistory}>Add note to history</button></label><div className="opportunity-history">{(historyById[selected?.id || ""] || []).length ? (historyById[selected?.id || ""] || []).map((entry, index) => <p key={`${entry}-${index}`}>{entry}</p>) : <p>No history recorded yet.</p>}</div></fieldset> : <div className="opportunity-section-grid"><fieldset><legend>Inquiry Details</legend><div className="drawer-field-grid"><label>Inquiry No.<input defaultValue={selected?.id || ""}/></label><label>Inquiry Date<input type="date"/></label><label>End User<input defaultValue="Private"/></label><label>How Found<select defaultValue="Current Client"><option>Current Client</option><option>Referral</option><option>Website</option><option>Tender Portal</option><option>Consultant</option><option>Other</option></select></label><label>Consultant<input /></label><label>Inquiry Submission Date<input type="date"/></label><label className="contact-notes">Scope of Work<textarea /></label></div></fieldset><fieldset><legend>Principle Information</legend><div className="drawer-field-grid"><label>Name<select defaultValue=""><option value="">Choose...</option>{supplierNames.map(name => <option key={name}>{name}</option>)}</select></label><label>Offer #<input /></label><label>Date<input type="date"/></label><label>Currency<select defaultValue="SAR"><option>SAR</option><option>USD</option><option>EUR</option></select></label><label>Total Offer<input ref={valueRef} defaultValue={selected?.value || ""}/></label></div></fieldset><fieldset><legend>Offer Information</legend><div className="drawer-field-grid"><label>Offer #<input defaultValue={selected?.id || ""}/></label><label>Offer Date<input type="date"/></label><label>Submission Date<input type="date"/></label><label>Currency<select defaultValue="SAR"><option>SAR</option><option>USD</option><option>EUR</option></select></label><label>Total Offer<input defaultValue={selected?.value || ""}/></label></div></fieldset><fieldset><legend>Link Information</legend><div className="drawer-field-grid"><label>Folder<input placeholder="Shared folder or document link"/></label><label>Project Milestone<input /></label></div></fieldset></div>}
   </section>;
-  return <section className="client-opportunities-workspace"><div className="related-head"><div><h3>Opportunities</h3><p>Workspace opportunities filtered for {customer?.name||"this client"}</p></div><button type="button" onClick={()=>onOpenWorkspaceOpportunity(null)}>+ New opportunity</button></div><RecordsPage module="Opportunities" rowsOverride={customerItems} sourceCountOverride={customerItems.length} query="" filter={listFilter} setFilter={setListFilter} announce={announce} onNewContact={()=>{}} onEditCustomer={onOpenWorkspaceOpportunity} onDeleteCommercial={async item=>{if(!window.confirm(`Delete ${item.name}?`))return;try{await deleteSupabaseRow("opportunities","opportunity_code",item.id);setItems(rows=>rows.filter(row=>row.id!==item.id));announce("Opportunity deleted from the database")}catch(error:any){announce(`Delete failed: ${error.message}`)}}} onDeleteContact={()=>{}} onDeleteCustomer={()=>{}} onDeleteEmployee={()=>{}} /></section>;
+    return <section className="client-opportunities-workspace"><div className="related-head"><div><h3>Opportunities</h3><p>Workspace opportunities filtered for {customer?.name || "this client"}</p></div><button type="button" onClick={() => onOpenWorkspaceOpportunity(null)}>+ New opportunity</button></div><RecordsPage module="Opportunities" rowsOverride={customerItems} sourceCountOverride={customerItems.length} query="" filter={listFilter} setFilter={setListFilter} announce={announce} onNewContact={() => { }} onEditCustomer={onOpenWorkspaceOpportunity} onDeleteCommercial={async (item) => { if (!window.confirm(`Delete ${item.name}?`))
+        return; try {
+        await deleteSupabaseRow("opportunities", "opportunity_code", item.id);
+        setItems(rows => rows.filter(row => row.id !== item.id));
+        announce("Opportunity deleted from the database");
+    }
+    catch (error: any) {
+        announce(`Delete failed: ${error.message}`);
+    } }} onDeleteContact={() => { }} onDeleteCustomer={() => { }} onDeleteEmployee={() => { }}/></section>;
 }
-
-function CustomerOpportunities({customer,employees,items,setItems,announce,onWon,onConvert}:{customer:Row|null,employees:Row[],items:CustomerOpportunity[],setItems:Dispatch<SetStateAction<CustomerOpportunity[]>>,announce:(message:string)=>void,onWon:(project:WonProject)=>void,onConvert:(opportunity:{id:string,name:string,value:string,owner:string})=>void}) {
-  const customerItems=items.filter(item=>item.customerId===customer?.id);
-  const [selected,setSelected]=useState<(typeof items)[number]|null>(null);
-  const [isNew,setIsNew]=useState(false);
-  const [stage,setStage]=useState("Bidding");
-  const nameRef=useRef<HTMLInputElement>(null);
-  const valueRef=useRef<HTMLInputElement>(null);
-  const ownerRef=useRef<HTMLSelectElement>(null);
-  const typeRef=useRef<HTMLSelectElement>(null);
-  const documentTypeRef=useRef<HTMLSelectElement>(null);
-  const [opportunityView,setOpportunityView]=useState<"Inquiry Information"|"History">("Inquiry Information");
-  const saveOpportunity=()=>{
-    const name=nameRef.current?.value.trim()||selected?.name||"";
-    if(!name){announce("Project Name is required");return;}
-    const saved:CustomerOpportunity={customerId:customer?.id||"",id:selected?.id||`OPP-${String(285+items.length).padStart(3,"0")}`,name,type:typeRef.current?.value||"Choose...",documentType:documentTypeRef.current?.value||"",value:valueRef.current?.value.trim()||selected?.value||"0",stage,owner:ownerRef.current?.value||employees[0]?.name||"",close:selected?.close||new Date().toISOString().slice(0,10)};
-    setItems(rows=>selected?rows.map(row=>row.id===selected.id?saved:row):[saved,...rows]);
-    if(documentTypeRef.current?.value==="Offer"){
-      onConvert(saved);
-    } else if(stage==="Secured"){
-      onWon({id:selected?.id||`PRJ-${120+items.length}`,customerId:customer?.id||"",name,type:"Opportunity conversion",status:"New",progress:"0%",start:new Date().toLocaleDateString(),due:"To be scheduled"});
-      announce("Secured opportunity transferred to the Project list");
-    } else announce(isNew?"New opportunity saved to the list":"Opportunity changes saved and updated in the list");
-    setSelected(null);setIsNew(false);
-  };
-  if(selected||isNew)return <section className="contact-detail opportunity-access"><div className="related-head"><div><button type="button" className="back-link" onClick={()=>{setSelected(null);setIsNew(false)}}>&lt;- Opportunity list</button><h3>{isNew?"New opportunity":selected?.name}</h3></div><div className="row-actions">{selected&&<button type="button" className="secondary convert-button" onClick={e=>{e.preventDefault();e.stopPropagation();onConvert({...selected,name:nameRef.current?.value.trim()||selected.name,value:valueRef.current?.value.trim()||selected.value,owner:ownerRef.current?.value||selected.owner})}}>Convert to quotation</button>}<button type="button" onClick={saveOpportunity}>Save opportunity</button></div></div>
-    <fieldset><legend>Opportunity details</legend><div className="drawer-field-grid opportunity-summary"><label>Client / Supplier<select defaultValue={customer?.name||""}><option>{customer?.name||"Current customer"}</option>{supplierNames.map(name=><option key={name}>{name}</option>)}</select></label><label>Opportunity Type<select ref={typeRef} defaultValue=""><option value="">Choose...</option><option>Canal Water</option><option>Grey Water</option><option>Sanitary Waste Water Plant</option><option>Desilination Plant</option><option>DAMS &amp; RAINWATER PLANTS</option><option>Others</option></select></label><label>Project Name<input ref={nameRef} defaultValue={selected?.name||""}/></label><label>Client Inquiry Status<select value={stage} onChange={e=>setStage(e.target.value)}><option>On Hand</option><option>Bidding</option><option>Proposal</option><option>Negotiation</option><option>Secured</option></select></label><label>Document Type<select ref={documentTypeRef} defaultValue={selected?.documentType||""}><option value="">Choose...</option><option>Case</option><option>Case Solved</option><option>Delivered</option><option>Inquiry</option><option>Letter</option><option>Offer</option><option>Order</option><option>Task</option><option>Secured</option></select></label><label>Handled By<select ref={ownerRef} defaultValue={selected?.owner||employees[0]?.name||""} aria-label="Responsible TPS employee">{employees.map(employee=><option key={employee.id} value={employee.name}>{employee.name}</option>)}</select></label><label>Year<input type="number" defaultValue={new Date().getFullYear()}/></label></div></fieldset>
-    <nav className="opportunity-subtabs" aria-label="Opportunity information pages"><button type="button" className={opportunityView==="Inquiry Information"?"active":""} onClick={()=>setOpportunityView("Inquiry Information")}>Inquiry Information</button><button type="button" className={opportunityView==="History"?"active":""} onClick={()=>setOpportunityView("History")}>History</button></nav>
-    {opportunityView==="History"?<fieldset><legend>Opportunity history</legend><div className="opportunity-history"><p>No updates have been recorded yet.</p><small>Saved changes will appear here with their date and time.</small></div></fieldset>:<div className="opportunity-section-grid">
-      <fieldset><legend>Inquiry Details</legend><div className="drawer-field-grid"><label>Inquiry No.<input defaultValue={selected?.id||"New"}/></label><label>Inquiry Date<input type="date"/></label><label>End User<input defaultValue="Private"/></label><label>How Found<select defaultValue="Current Customer"><option>Current Customer</option><option>Referral</option><option>Website</option><option>Other</option></select></label><label>Consultant<input/></label><label>Inquiry Submission Date<input type="date"/></label><label className="contact-notes">Scope of Work<textarea/></label></div></fieldset>
-      <fieldset><legend>Principal Information</legend><div className="drawer-field-grid"><label>Principal Name<select defaultValue=""><option value="">Select supplier...</option>{supplierNames.map(name=><option key={name}>{name}</option>)}</select></label><label>Principal Offer No.<input/></label><label>Principal Offer Date<input type="date"/></label><label>Currency<select defaultValue="SAR"><option>SAR</option><option>USD</option><option>EUR</option></select></label><label>Total Principal Offer<input ref={valueRef} defaultValue={selected?.value||""}/></label></div></fieldset>
-      <fieldset><legend>Offer Information</legend><div className="drawer-field-grid"><label>Offer No.<input defaultValue={selected?.id?.replace("OPP","OFF")||""}/></label><label>Offer Date<input type="date"/></label><label>Submission Date<input type="date"/></label><label>Currency<select defaultValue="SAR"><option>SAR</option><option>USD</option><option>EUR</option></select></label><label>Total Offer<input defaultValue={selected?.value||""}/></label></div></fieldset>
+function CustomerOpportunities({ customer, employees, items, setItems, announce, onWon, onConvert }: {
+    customer: Row | null;
+    employees: Row[];
+    items: CustomerOpportunity[];
+    setItems: Dispatch<SetStateAction<CustomerOpportunity[]>>;
+    announce: (message: string) => void;
+    onWon: (project: WonProject) => void;
+    onConvert: (opportunity: {
+        id: string;
+        name: string;
+        value: string;
+        owner: string;
+    }) => void;
+}) {
+    const customerItems = items.filter(item => item.customerId === customer?.id);
+    const [selected, setSelected] = useState<(typeof items)[number] | null>(null);
+    const [isNew, setIsNew] = useState(false);
+    const [stage, setStage] = useState("Bidding");
+    const nameRef = useRef<HTMLInputElement>(null);
+    const valueRef = useRef<HTMLInputElement>(null);
+    const ownerRef = useRef<HTMLSelectElement>(null);
+    const typeRef = useRef<HTMLSelectElement>(null);
+    const documentTypeRef = useRef<HTMLSelectElement>(null);
+    const [opportunityView, setOpportunityView] = useState<"Inquiry Information" | "History">("Inquiry Information");
+    const saveOpportunity = () => {
+        const name = nameRef.current?.value.trim() || selected?.name || "";
+        if (!name) {
+            announce("Project Name is required");
+            return;
+        }
+        const saved: CustomerOpportunity = { customerId: customer?.id || "", id: selected?.id || `OPP-${String(285 + items.length).padStart(3, "0")}`, name, type: typeRef.current?.value || "Choose...", documentType: documentTypeRef.current?.value || "", value: valueRef.current?.value.trim() || selected?.value || "0", stage, owner: ownerRef.current?.value || employees[0]?.name || "", close: selected?.close || new Date().toISOString().slice(0, 10) };
+        setItems(rows => selected ? rows.map(row => row.id === selected.id ? saved : row) : [saved, ...rows]);
+        if (documentTypeRef.current?.value === "Offer") {
+            onConvert(saved);
+        }
+        else if (stage === "Secured") {
+            onWon({ id: selected?.id || `PRJ-${120 + items.length}`, customerId: customer?.id || "", name, type: "Opportunity conversion", status: "New", progress: "0%", start: new Date().toLocaleDateString(), due: "To be scheduled" });
+            announce("Secured opportunity transferred to the Project list");
+        }
+        else
+            announce(isNew ? "New opportunity saved to the list" : "Opportunity changes saved and updated in the list");
+        setSelected(null);
+        setIsNew(false);
+    };
+    if (selected || isNew)
+        return <section className="contact-detail opportunity-access"><div className="related-head"><div><button type="button" className="back-link" onClick={() => { setSelected(null); setIsNew(false); }}>&lt;- Opportunity list</button><h3>{isNew ? "New opportunity" : selected?.name}</h3></div><div className="row-actions">{selected && <button type="button" className="secondary convert-button" onClick={e => { e.preventDefault(); e.stopPropagation(); onConvert({ ...selected, name: nameRef.current?.value.trim() || selected.name, value: valueRef.current?.value.trim() || selected.value, owner: ownerRef.current?.value || selected.owner }); }}>Convert to quotation</button>}<button type="button" onClick={saveOpportunity}>Save opportunity</button></div></div>
+    <fieldset><legend>Opportunity details</legend><div className="drawer-field-grid opportunity-summary"><label>Client / Supplier<select defaultValue={customer?.name || ""}><option>{customer?.name || "Current customer"}</option>{supplierNames.map(name => <option key={name}>{name}</option>)}</select></label><label>Opportunity Type<select ref={typeRef} defaultValue=""><option value="">Choose...</option><option>Canal Water</option><option>Grey Water</option><option>Sanitary Waste Water Plant</option><option>Desilination Plant</option><option>DAMS &amp; RAINWATER PLANTS</option><option>Others</option></select></label><label>Project Name<input ref={nameRef} defaultValue={selected?.name || ""}/></label><label>Client Inquiry Status<select value={stage} onChange={e => setStage(e.target.value)}><option>On Hand</option><option>Bidding</option><option>Proposal</option><option>Negotiation</option><option>Secured</option></select></label><label>Document Type<select ref={documentTypeRef} defaultValue={selected?.documentType || ""}><option value="">Choose...</option><option>Case</option><option>Case Solved</option><option>Delivered</option><option>Inquiry</option><option>Letter</option><option>Offer</option><option>Order</option><option>Task</option><option>Secured</option></select></label><label>Handled By<select ref={ownerRef} defaultValue={selected?.owner || employees[0]?.name || ""} aria-label="Responsible TPS employee">{employees.map(employee => <option key={employee.id} value={employee.name}>{employee.name}</option>)}</select></label><label>Year<input type="number" defaultValue={new Date().getFullYear()}/></label></div></fieldset>
+    <nav className="opportunity-subtabs" aria-label="Opportunity information pages"><button type="button" className={opportunityView === "Inquiry Information" ? "active" : ""} onClick={() => setOpportunityView("Inquiry Information")}>Inquiry Information</button><button type="button" className={opportunityView === "History" ? "active" : ""} onClick={() => setOpportunityView("History")}>History</button></nav>
+    {opportunityView === "History" ? <fieldset><legend>Opportunity history</legend><div className="opportunity-history"><p>No updates have been recorded yet.</p><small>Saved changes will appear here with their date and time.</small></div></fieldset> : <div className="opportunity-section-grid">
+      <fieldset><legend>Inquiry Details</legend><div className="drawer-field-grid"><label>Inquiry No.<input defaultValue={selected?.id || "New"}/></label><label>Inquiry Date<input type="date"/></label><label>End User<input defaultValue="Private"/></label><label>How Found<select defaultValue="Current Customer"><option>Current Customer</option><option>Referral</option><option>Website</option><option>Other</option></select></label><label>Consultant<input /></label><label>Inquiry Submission Date<input type="date"/></label><label className="contact-notes">Scope of Work<textarea /></label></div></fieldset>
+      <fieldset><legend>Principal Information</legend><div className="drawer-field-grid"><label>Principal Name<select defaultValue=""><option value="">Select supplier...</option>{supplierNames.map(name => <option key={name}>{name}</option>)}</select></label><label>Principal Offer No.<input /></label><label>Principal Offer Date<input type="date"/></label><label>Currency<select defaultValue="SAR"><option>SAR</option><option>USD</option><option>EUR</option></select></label><label>Total Principal Offer<input ref={valueRef} defaultValue={selected?.value || ""}/></label></div></fieldset>
+      <fieldset><legend>Offer Information</legend><div className="drawer-field-grid"><label>Offer No.<input defaultValue={selected?.id?.replace("OPP", "OFF") || ""}/></label><label>Offer Date<input type="date"/></label><label>Submission Date<input type="date"/></label><label>Currency<select defaultValue="SAR"><option>SAR</option><option>USD</option><option>EUR</option></select></label><label>Total Offer<input defaultValue={selected?.value || ""}/></label></div></fieldset>
       <fieldset><legend>Link Information</legend><div className="drawer-field-grid"><label className="contact-notes">Folder / Document Link<input type="url" placeholder="https:// or shared folder path"/></label><label className="contact-notes">Project Milestone<textarea placeholder="Enter the next project milestone"/></label></div></fieldset>
     </div>}
   </section>;
-  return <section className="related-list"><div className="related-head"><div><h3>Opportunity list</h3><p>{customerItems.length} opportunities linked to this customer</p></div><button type="button" onClick={()=>{setSelected(null);setStage("Bidding");setIsNew(true)}}>+ New opportunity</button></div><div className="table-scroll"><table><thead><tr><th>ID</th><th>Opportunity</th><th>Type</th><th>Value</th><th>Stage</th><th>Owner</th><th>Close date</th></tr></thead><tbody>{customerItems.map(item=><tr key={item.id} className="record-row" onClick={()=>{setSelected(item);setStage(item.stage);setIsNew(false)}}><td><span className="record-id">{item.id}</span></td><td><strong>{item.name}</strong></td><td>{item.type}</td><td>{item.value}</td><td><Status value={item.stage}/></td><td>{item.owner}</td><td>{item.close}</td></tr>)}</tbody></table></div></section>;
+    return <section className="related-list"><div className="related-head"><div><h3>Opportunity list</h3><p>{customerItems.length} opportunities linked to this customer</p></div><button type="button" onClick={() => { setSelected(null); setStage("Bidding"); setIsNew(true); }}>+ New opportunity</button></div><div className="table-scroll"><table><thead><tr><th>ID</th><th>Opportunity</th><th>Type</th><th>Value</th><th>Stage</th><th>Owner</th><th>Close date</th></tr></thead><tbody>{customerItems.map(item => <tr key={item.id} className="record-row" onClick={() => { setSelected(item); setStage(item.stage); setIsNew(false); }}><td><span className="record-id">{item.id}</span></td><td><strong>{item.name}</strong></td><td>{item.type}</td><td>{item.value}</td><td><Status value={item.stage}/></td><td>{item.owner}</td><td>{item.close}</td></tr>)}</tbody></table></div></section>;
 }
-
-function CustomerSuppliers({announce}:{announce:(message:string)=>void}) {
-  const suppliers:{id:string;name:string;category:string;scope:string;contact:string;phone:string;email:string;status:string}[]=[];
-  const [selected,setSelected]=useState<(typeof suppliers)[number]|null>(null);
-  const [savedMessage,setSavedMessage]=useState("");
-  if(selected)return <section className="contact-detail"><div className="related-head"><div><button type="button" className="back-link" onClick={()=>setSelected(null)}>&lt;- Supplier list</button><h3>{selected.name}</h3></div><button type="button" onClick={()=>{const message=`Supplier data saved successfully at ${new Date().toLocaleTimeString()}`;setSavedMessage(message);announce(message)}}>Save supplier</button></div>{savedMessage&&<div className="save-confirmation" role="status"><strong>Saved</strong><span>{savedMessage}</span></div>}<fieldset><legend>Supplier details</legend><div className="drawer-field-grid"><label>Supplier ID<input defaultValue={selected.id}/></label><label>Supplier Name<input defaultValue={selected.name}/></label><label>Category<input defaultValue={selected.category}/></label><label>Status<select defaultValue={selected.status}><option>Active</option><option>Approved</option><option>Pending</option><option>Inactive</option></select></label><label className="contact-notes">Scope of Supply / What they sell<textarea required defaultValue={selected.scope} placeholder="Describe the products and services supplied"/></label><label>Contact Person<input defaultValue={selected.contact}/></label><label>Phone<input defaultValue={selected.phone}/></label><label>Email<input defaultValue={selected.email}/></label><label className="contact-notes">Notes<textarea/></label></div></fieldset></section>;
-  return <section className="related-list"><div className="related-head"><div><h3>Supplier list</h3><p>{suppliers.length} linked supplier references — supplier information is stored separately</p></div><button type="button" onClick={()=>announce("Use the Suppliers screen to add a new supplier")}>+ New supplier</button></div><div className="table-scroll"><table><thead><tr><th>ID</th><th>Supplier</th><th>Category</th><th>Scope of supply</th><th>Contact</th><th>Phone</th><th>Email</th><th>Status</th></tr></thead><tbody>{suppliers.map(supplier=><tr key={supplier.id} className="record-row" onClick={()=>setSelected(supplier)}><td><span className="record-id">{supplier.id}</span></td><td><strong>{supplier.name}</strong></td><td>{supplier.category}</td><td>{supplier.scope}</td><td>{supplier.contact}</td><td>{supplier.phone}</td><td>{supplier.email}</td><td><Status value={supplier.status}/></td></tr>)}</tbody></table></div></section>;
+function CustomerSuppliers({ announce }: {
+    announce: (message: string) => void;
+}) {
+    const suppliers: {
+        id: string;
+        name: string;
+        category: string;
+        scope: string;
+        contact: string;
+        phone: string;
+        email: string;
+        status: string;
+    }[] = [];
+    const [selected, setSelected] = useState<(typeof suppliers)[number] | null>(null);
+    const [savedMessage, setSavedMessage] = useState("");
+    if (selected)
+        return <section className="contact-detail"><div className="related-head"><div><button type="button" className="back-link" onClick={() => setSelected(null)}>&lt;- Supplier list</button><h3>{selected.name}</h3></div><button type="button" onClick={() => { const message = `Supplier data saved successfully at ${new Date().toLocaleTimeString()}`; setSavedMessage(message); announce(message); }}>Save supplier</button></div>{savedMessage && <div className="save-confirmation" role="status"><strong>Saved</strong><span>{savedMessage}</span></div>}<fieldset><legend>Supplier details</legend><div className="drawer-field-grid"><label>Supplier ID<input defaultValue={selected.id}/></label><label>Supplier Name<input defaultValue={selected.name}/></label><label>Category<input defaultValue={selected.category}/></label><label>Status<select defaultValue={selected.status}><option>Active</option><option>Approved</option><option>Pending</option><option>Inactive</option></select></label><label className="contact-notes">Scope of Supply / What they sell<textarea required defaultValue={selected.scope} placeholder="Describe the products and services supplied"/></label><label>Contact Person<input defaultValue={selected.contact}/></label><label>Phone<input defaultValue={selected.phone}/></label><label>Email<input defaultValue={selected.email}/></label><label className="contact-notes">Notes<textarea /></label></div></fieldset></section>;
+    return <section className="related-list"><div className="related-head"><div><h3>Supplier list</h3><p>{suppliers.length} linked supplier references — supplier information is stored separately</p></div><button type="button" onClick={() => announce("Use the Suppliers screen to add a new supplier")}>+ New supplier</button></div><div className="table-scroll"><table><thead><tr><th>ID</th><th>Supplier</th><th>Category</th><th>Scope of supply</th><th>Contact</th><th>Phone</th><th>Email</th><th>Status</th></tr></thead><tbody>{suppliers.map(supplier => <tr key={supplier.id} className="record-row" onClick={() => setSelected(supplier)}><td><span className="record-id">{supplier.id}</span></td><td><strong>{supplier.name}</strong></td><td>{supplier.category}</td><td>{supplier.scope}</td><td>{supplier.contact}</td><td>{supplier.phone}</td><td>{supplier.email}</td><td><Status value={supplier.status}/></td></tr>)}</tbody></table></div></section>;
 }
-
-function CustomerProjects({customer,announce,wonProjects,workspaceProjects,initialProject=null}:{customer:Row|null,announce:(message:string)=>void,wonProjects:WonProject[],workspaceProjects:Row[],initialProject?:Row|null}) {
-  const dateValue=(value:string)=>{const parsed=new Date(value);return Number.isNaN(parsed.getTime())?"":`${parsed.getFullYear()}-${String(parsed.getMonth()+1).padStart(2,"0")}-${String(parsed.getDate()).padStart(2,"0")}`};
-  const workspaceItems=workspaceProjects.map(project=>({customerId:records.Customers.find(client=>client.name===project.account)?.id||"",id:project.id,name:project.name,type:"Project",status:project.status,progress:project.value,start:"To be scheduled",due:project.date}));
-  const items=[...wonProjects,...workspaceItems].filter(item=>item.customerId===customer?.id);
-  const initialItem=initialProject?items.find(item=>item.id===initialProject.id)||null:null;
-  const [selected,setSelected]=useState<(typeof items)[number]|null>(initialItem);
-  const [projectStatus,setProjectStatus]=useState(initialItem?.status||"In progress");
-  const [projectProgress,setProjectProgress]=useState(Number.parseInt(initialItem?.progress||"0")||0);
-  const [startDate,setStartDate]=useState(dateValue(initialItem?.start||""));
-  const [endDate,setEndDate]=useState(dateValue(initialItem?.due||""));
-  const durationDays=startDate&&endDate?Math.max(0,Math.ceil((new Date(`${endDate}T00:00:00`).getTime()-new Date(`${startDate}T00:00:00`).getTime())/86400000)):0;
-  const isBehindSchedule=Boolean(endDate&&projectStatus!=="Completed"&&new Date(`${endDate}T23:59:59`).getTime()<Date.now());
-  const scheduleMessage=isBehindSchedule?`⚠ Delivery is behind schedule. The estimated end date was ${new Date(`${endDate}T00:00:00`).toLocaleDateString()}.`:"Delivery is currently on schedule.";
-  const openProject=(item:(typeof items)[number])=>{setSelected(item);setProjectStatus(item.status);setProjectProgress(Number.parseInt(item.progress)||0);setStartDate(dateValue(item.start));setEndDate(dateValue(item.due))};
-  if(selected){const current=Math.min(4,projectStatus==="Completed"?4:projectStatus==="In progress"?2:projectStatus==="On hold"?1:1);return <section className="contact-detail client-project-dashboard"><div className="related-head"><div><button type="button" className="back-link" onClick={()=>setSelected(null)}>&lt;- Project list</button><h3>{selected.name}</h3></div></div><section className="project-status-page"><div className="project-stage-card"><div><span className="project-eyebrow">CLIENT PROJECT STATUS</span><h3>{selected.name}</h3><p>{customer?.name} · {selected.id}</p></div><div className="project-progress-ring" style={{background:`conic-gradient(#0f62fe ${projectProgress}%, #e0e0e0 0)`}}><span>{projectProgress}%<small>complete</small></span></div></div><div className="project-stage-track" aria-label="Project lifecycle">{["Won","Planning","Execution","Delivery","Complete"].map((stage,index)=><div key={stage} className={index<current?"done":index===current?"current":""}><i>{index<current?"✓":index+1}</i><span>{stage}</span></div>)}</div><div className="project-health-grid"><article><span>STATUS</span><strong className={`project-health ${projectStatus.toLowerCase().replace(" ","-")}`}>{projectStatus}</strong><small>Current delivery state</small></article><article><span>TYPE</span><strong>{selected.type}</strong><small>Project classification</small></article><article><span>CLIENT</span><strong>{customer?.name||"—"}</strong><small>Linked client</small></article><article><span>DUE DATE</span><strong>{selected.due}</strong><small>Target completion</small></article></div><fieldset className="opportunity-project-page"><legend>Project control</legend><div className="drawer-field-grid"><label>Project ID<input defaultValue={selected.id}/></label><label>Project Name<input defaultValue={selected.name}/></label><label>Project Type<input defaultValue={selected.type}/></label><label>Status<select value={projectStatus} onChange={event=>setProjectStatus(event.target.value)}><option>New</option><option>In progress</option><option>Review</option><option>On hold</option><option>Completed</option></select></label><label>Progress: {projectProgress}%<input className="project-progress-input" type="range" min="0" max="100" step="5" value={projectProgress} onChange={event=>setProjectProgress(Number(event.target.value))}/></label><label>Start Date<input type="date" value={startDate} onChange={event=>setStartDate(event.target.value)} onClick={event=>event.currentTarget.showPicker?.()}/></label><label>Estimated End Date<input type="date" min={startDate||undefined} value={endDate} onChange={event=>setEndDate(event.target.value)} onClick={event=>event.currentTarget.showPicker?.()}/></label><label>Actual Revenue<input/></label><label>Duration (Days)<input value={startDate&&endDate?durationDays:""} readOnly placeholder="Calculated automatically"/></label><label>Currency<select defaultValue="SAR"><option>SAR</option><option>USD</option><option>EUR</option></select></label><label className={`contact-notes schedule-note ${isBehindSchedule?"behind-schedule":""}`}>Delivery Status<textarea value={scheduleMessage} readOnly aria-live="polite"/></label></div></fieldset></section></section>}
-  return <section className="related-list"><div className="related-head"><div><h3>Project list</h3><p>{items.length} projects linked to this customer</p></div><button type="button" onClick={()=>announce("New project form opened")}>+ New project</button></div><div className="table-scroll"><table><thead><tr><th>ID</th><th>Project</th><th>Type</th><th>Status</th><th>Progress</th><th>Start</th><th>Due</th></tr></thead><tbody>{items.map(item=><tr key={item.id} className="record-row" onClick={()=>openProject(item)}><td><span className="record-id">{item.id}</span></td><td><strong>{item.name}</strong></td><td>{item.type}</td><td><Status value={item.status}/></td><td>{item.progress}</td><td>{item.start}</td><td>{item.due}</td></tr>)}</tbody></table></div></section>;
+function CustomerProjects({ customer, announce, wonProjects, workspaceProjects, initialProject = null }: {
+    customer: Row | null;
+    announce: (message: string) => void;
+    wonProjects: WonProject[];
+    workspaceProjects: Row[];
+    initialProject?: Row | null;
+}) {
+    const dateValue = (value: string) => { const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? "" : `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`; };
+    const workspaceItems = workspaceProjects.map(project => ({ customerId: records.Customers.find(client => client.name === project.account)?.id || "", id: project.id, name: project.name, type: "Project", status: project.status, progress: project.value, start: "To be scheduled", due: project.date }));
+    const items = [...wonProjects, ...workspaceItems].filter(item => item.customerId === customer?.id);
+    const initialItem = initialProject ? items.find(item => item.id === initialProject.id) || null : null;
+    const [selected, setSelected] = useState<(typeof items)[number] | null>(initialItem);
+    const [projectStatus, setProjectStatus] = useState(initialItem?.status || "In progress");
+    const [projectProgress, setProjectProgress] = useState(Number.parseInt(initialItem?.progress || "0") || 0);
+    const [startDate, setStartDate] = useState(dateValue(initialItem?.start || ""));
+    const [endDate, setEndDate] = useState(dateValue(initialItem?.due || ""));
+    const durationDays = startDate && endDate ? Math.max(0, Math.ceil((new Date(`${endDate}T00:00:00`).getTime() - new Date(`${startDate}T00:00:00`).getTime()) / 86400000)) : 0;
+    const isBehindSchedule = Boolean(endDate && projectStatus !== "Completed" && new Date(`${endDate}T23:59:59`).getTime() < Date.now());
+    const scheduleMessage = isBehindSchedule ? `⚠ Delivery is behind schedule. The estimated end date was ${new Date(`${endDate}T00:00:00`).toLocaleDateString()}.` : "Delivery is currently on schedule.";
+    const openProject = (item: (typeof items)[number]) => { setSelected(item); setProjectStatus(item.status); setProjectProgress(Number.parseInt(item.progress) || 0); setStartDate(dateValue(item.start)); setEndDate(dateValue(item.due)); };
+    if (selected) {
+        const current = Math.min(4, projectStatus === "Completed" ? 4 : projectStatus === "In progress" ? 2 : projectStatus === "On hold" ? 1 : 1);
+        return <section className="contact-detail client-project-dashboard"><div className="related-head"><div><button type="button" className="back-link" onClick={() => setSelected(null)}>&lt;- Project list</button><h3>{selected.name}</h3></div></div><section className="project-status-page"><div className="project-stage-card"><div><span className="project-eyebrow">CLIENT PROJECT STATUS</span><h3>{selected.name}</h3><p>{customer?.name} · {selected.id}</p></div><div className="project-progress-ring" style={{ background: `conic-gradient(#0f62fe ${projectProgress}%, #e0e0e0 0)` }}><span>{projectProgress}%<small>complete</small></span></div></div><div className="project-stage-track" aria-label="Project lifecycle">{["Won", "Planning", "Execution", "Delivery", "Complete"].map((stage, index) => <div key={stage} className={index < current ? "done" : index === current ? "current" : ""}><i>{index < current ? "✓" : index + 1}</i><span>{stage}</span></div>)}</div><div className="project-health-grid"><article><span>STATUS</span><strong className={`project-health ${projectStatus.toLowerCase().replace(" ", "-")}`}>{projectStatus}</strong><small>Current delivery state</small></article><article><span>TYPE</span><strong>{selected.type}</strong><small>Project classification</small></article><article><span>CLIENT</span><strong>{customer?.name || "—"}</strong><small>Linked client</small></article><article><span>DUE DATE</span><strong>{selected.due}</strong><small>Target completion</small></article></div><fieldset className="opportunity-project-page"><legend>Project control</legend><div className="drawer-field-grid"><label>Project ID<input defaultValue={selected.id}/></label><label>Project Name<input defaultValue={selected.name}/></label><label>Project Type<input defaultValue={selected.type}/></label><label>Status<select value={projectStatus} onChange={event => setProjectStatus(event.target.value)}><option>New</option><option>In progress</option><option>Review</option><option>On hold</option><option>Completed</option></select></label><label>Progress: {projectProgress}%<input className="project-progress-input" type="range" min="0" max="100" step="5" value={projectProgress} onChange={event => setProjectProgress(Number(event.target.value))}/></label><label>Start Date<input type="date" value={startDate} onChange={event => setStartDate(event.target.value)} onClick={event => event.currentTarget.showPicker?.()}/></label><label>Estimated End Date<input type="date" min={startDate || undefined} value={endDate} onChange={event => setEndDate(event.target.value)} onClick={event => event.currentTarget.showPicker?.()}/></label><label>Actual Revenue<input /></label><label>Duration (Days)<input value={startDate && endDate ? durationDays : ""} readOnly placeholder="Calculated automatically"/></label><label>Currency<select defaultValue="SAR"><option>SAR</option><option>USD</option><option>EUR</option></select></label><label className={`contact-notes schedule-note ${isBehindSchedule ? "behind-schedule" : ""}`}>Delivery Status<textarea value={scheduleMessage} readOnly aria-live="polite"/></label></div></fieldset></section></section>;
+    }
+    return <section className="related-list"><div className="related-head"><div><h3>Project list</h3><p>{items.length} projects linked to this customer</p></div><button type="button" onClick={() => announce("New project form opened")}>+ New project</button></div><div className="table-scroll"><table><thead><tr><th>ID</th><th>Project</th><th>Type</th><th>Status</th><th>Progress</th><th>Start</th><th>Due</th></tr></thead><tbody>{items.map(item => <tr key={item.id} className="record-row" onClick={() => openProject(item)}><td><span className="record-id">{item.id}</span></td><td><strong>{item.name}</strong></td><td>{item.type}</td><td><Status value={item.status}/></td><td>{item.progress}</td><td>{item.start}</td><td>{item.due}</td></tr>)}</tbody></table></div></section>;
 }
-
-function CustomerActivities({announce}:{announce:(message:string)=>void}) {
-  const items:{id:string;type:string;subject:string;owner:string;date:string;status:string;notes:string}[]=[];
-  const [selected,setSelected]=useState<(typeof items)[number]|null>(null);
-  const [isNew,setIsNew]=useState(false);
-  const [descriptionDraft,setDescriptionDraft]=useState("");
-  const [descriptionVersion,setDescriptionVersion]=useState(0);
-  const [historyEntries,setHistoryEntries]=useState<string[]>([]);
-  if(selected||isNew)return <section className="contact-detail"><div className="related-head"><div><button type="button" className="back-link" onClick={()=>{setSelected(null);setIsNew(false);setDescriptionDraft("")}}>&lt;- Activity list</button><h3>{isNew?"New activity":selected?.subject}</h3></div><button type="button" onClick={()=>{const description=descriptionDraft.trim();if(!description){announce("Write a description before saving");return;}setHistoryEntries(entries=>[`${new Date().toLocaleString()} — ${description}`,...entries]);setDescriptionDraft("");setDescriptionVersion(version=>version+1);announce("Description moved to history with date and time")}}>Save activity</button></div><fieldset><legend>Activity details</legend><div className="drawer-field-grid"><label>Activity ID<input defaultValue={selected?.id||"New"} readOnly={isNew}/></label><label>Activity Type<select defaultValue={selected?.type||"Phone call"}><option>Phone call</option><option>Meeting</option><option>Email</option><option>Site visit</option></select></label><label>Activity Date<input type="date" defaultValue={isNew?"2026-08-04":""}/></label><label>Assigned To<select defaultValue={selected?.owner||"Alex Morgan"}><option value="">Select TPS employee...</option><option>Alex Morgan</option><option>Sarah Chen</option><option>David Kim</option></select></label><label>Status<select defaultValue={selected?.status||"Scheduled"}><option>Scheduled</option><option>In progress</option><option>Completed</option><option>Cancelled</option></select></label><label>Subject<input required defaultValue={selected?.subject||""} placeholder="Activity subject"/></label><label className="contact-notes">Description / Notes<VoiceTextarea key={descriptionVersion} defaultValue="" onValueChange={setDescriptionDraft}/></label><label>Attachments<input type="file"/></label><label className="contact-notes history-field">History<textarea readOnly value={historyEntries.join("\n\n")}/><small>Save moves the description here and adds the current date and time.</small></label></div></fieldset></section>;
-  return <section className="related-list"><div className="related-head"><div><h3>Activity list</h3><p>{items.length} activities linked to this customer</p></div><button type="button" onClick={()=>setIsNew(true)}>+ New activity</button></div><div className="table-scroll"><table><thead><tr><th>ID</th><th>Type</th><th>Subject</th><th>Owner</th><th>Date</th><th>Status</th></tr></thead><tbody>{items.map(item=><tr key={item.id} className="record-row" onClick={()=>setSelected(item)}><td><span className="record-id">{item.id}</span></td><td>{item.type}</td><td><strong>{item.subject}</strong></td><td>{item.owner}</td><td>{item.date}</td><td><Status value={item.status}/></td></tr>)}</tbody></table></div></section>;
+function CustomerActivities({ announce }: {
+    announce: (message: string) => void;
+}) {
+    const items: {
+        id: string;
+        type: string;
+        subject: string;
+        owner: string;
+        date: string;
+        status: string;
+        notes: string;
+    }[] = [];
+    const [selected, setSelected] = useState<(typeof items)[number] | null>(null);
+    const [isNew, setIsNew] = useState(false);
+    const [descriptionDraft, setDescriptionDraft] = useState("");
+    const [descriptionVersion, setDescriptionVersion] = useState(0);
+    const [historyEntries, setHistoryEntries] = useState<string[]>([]);
+    if (selected || isNew)
+        return <section className="contact-detail"><div className="related-head"><div><button type="button" className="back-link" onClick={() => { setSelected(null); setIsNew(false); setDescriptionDraft(""); }}>&lt;- Activity list</button><h3>{isNew ? "New activity" : selected?.subject}</h3></div><button type="button" onClick={() => { const description = descriptionDraft.trim(); if (!description) {
+            announce("Write a description before saving");
+            return;
+        } setHistoryEntries(entries => [`${new Date().toLocaleString()} — ${description}`, ...entries]); setDescriptionDraft(""); setDescriptionVersion(version => version + 1); announce("Description moved to history with date and time"); }}>Save activity</button></div><fieldset><legend>Activity details</legend><div className="drawer-field-grid"><label>Activity ID<input defaultValue={selected?.id || "New"} readOnly={isNew}/></label><label>Activity Type<select defaultValue={selected?.type || "Phone call"}><option>Phone call</option><option>Meeting</option><option>Email</option><option>Site visit</option></select></label><label>Activity Date<input type="date" defaultValue={isNew ? "2026-08-04" : ""}/></label><label>Assigned To<select defaultValue={selected?.owner || "Alex Morgan"}><option value="">Select TPS employee...</option><option>Alex Morgan</option><option>Sarah Chen</option><option>David Kim</option></select></label><label>Status<select defaultValue={selected?.status || "Scheduled"}><option>Scheduled</option><option>In progress</option><option>Completed</option><option>Cancelled</option></select></label><label>Subject<input required defaultValue={selected?.subject || ""} placeholder="Activity subject"/></label><label className="contact-notes">Description / Notes<VoiceTextarea key={descriptionVersion} defaultValue="" onValueChange={setDescriptionDraft}/></label><label>Attachments<input type="file"/></label><label className="contact-notes history-field">History<textarea readOnly value={historyEntries.join("\n\n")}/><small>Save moves the description here and adds the current date and time.</small></label></div></fieldset></section>;
+    return <section className="related-list"><div className="related-head"><div><h3>Activity list</h3><p>{items.length} activities linked to this customer</p></div><button type="button" onClick={() => setIsNew(true)}>+ New activity</button></div><div className="table-scroll"><table><thead><tr><th>ID</th><th>Type</th><th>Subject</th><th>Owner</th><th>Date</th><th>Status</th></tr></thead><tbody>{items.map(item => <tr key={item.id} className="record-row" onClick={() => setSelected(item)}><td><span className="record-id">{item.id}</span></td><td>{item.type}</td><td><strong>{item.subject}</strong></td><td>{item.owner}</td><td>{item.date}</td><td><Status value={item.status}/></td></tr>)}</tbody></table></div></section>;
 }
-
-function CustomerDeliveries({announce}:{announce:(message:string)=>void}) {
-  const items:{id:string;project:string;po:string;item:string;qty:string;status:string;planned:string;actual:string;terms:string}[]=[];
-  const [selected,setSelected]=useState<(typeof items)[number]|null>(null); const [isNew,setIsNew]=useState(false);
-  if(selected||isNew)return <section className="contact-detail"><div className="related-head"><div><button type="button" className="back-link" onClick={()=>{setSelected(null);setIsNew(false)}}>&lt;- Delivery list</button><h3>{isNew?"New delivery":selected?.id}</h3></div><button type="button" onClick={()=>{announce(isNew?"New delivery saved":"Delivery changes saved");setSelected(null);setIsNew(false)}}>Save delivery</button></div><fieldset><legend>Delivery details</legend><div className="drawer-field-grid"><label>Delivery ID<input defaultValue={selected?.id||"New"} readOnly={isNew}/></label><label>Project<input defaultValue={selected?.project||""}/></label><label>Customer PO<input defaultValue={selected?.po||""}/></label><label>Item / Equipment<input defaultValue={selected?.item||""}/></label><label>Quantity<input defaultValue={selected?.qty||""}/></label><label>Status<select defaultValue={selected?.status||"Preparing"}><option>Preparing</option><option>Ready to ship</option><option>In transit</option><option>Delivered</option><option>Delayed</option></select></label><label>Planned Delivery Date<input defaultValue={selected?.planned||""}/></label><label>Actual Delivery Date<input defaultValue={selected?.actual||""}/></label><label>Delivery Terms<input defaultValue={selected?.terms||""}/></label><label>Carrier<input/></label><label>Tracking Number<input/></label><label className="contact-notes">Delivery Notes<textarea/></label><label>Attachments<input type="file"/></label></div></fieldset></section>;
-  return <section className="related-list"><div className="related-head"><div><h3>Delivery list</h3><p>{items.length} deliveries linked to this customer</p></div><button type="button" onClick={()=>setIsNew(true)}>+ New delivery</button></div><div className="table-scroll"><table><thead><tr><th>ID</th><th>Project</th><th>Customer PO</th><th>Item</th><th>Qty</th><th>Status</th><th>Planned date</th><th>Actual date</th></tr></thead><tbody>{items.map(item=><tr key={item.id} className="record-row" onClick={()=>setSelected(item)}><td><span className="record-id">{item.id}</span></td><td><strong>{item.project}</strong></td><td>{item.po}</td><td>{item.item}</td><td>{item.qty}</td><td><Status value={item.status}/></td><td>{item.planned}</td><td>{item.actual}</td></tr>)}</tbody></table></div></section>;
+function CustomerDeliveries({ announce }: {
+    announce: (message: string) => void;
+}) {
+    const items: {
+        id: string;
+        project: string;
+        po: string;
+        item: string;
+        qty: string;
+        status: string;
+        planned: string;
+        actual: string;
+        terms: string;
+    }[] = [];
+    const [selected, setSelected] = useState<(typeof items)[number] | null>(null);
+    const [isNew, setIsNew] = useState(false);
+    if (selected || isNew)
+        return <section className="contact-detail"><div className="related-head"><div><button type="button" className="back-link" onClick={() => { setSelected(null); setIsNew(false); }}>&lt;- Delivery list</button><h3>{isNew ? "New delivery" : selected?.id}</h3></div><button type="button" onClick={() => { announce(isNew ? "New delivery saved" : "Delivery changes saved"); setSelected(null); setIsNew(false); }}>Save delivery</button></div><fieldset><legend>Delivery details</legend><div className="drawer-field-grid"><label>Delivery ID<input defaultValue={selected?.id || "New"} readOnly={isNew}/></label><label>Project<input defaultValue={selected?.project || ""}/></label><label>Customer PO<input defaultValue={selected?.po || ""}/></label><label>Item / Equipment<input defaultValue={selected?.item || ""}/></label><label>Quantity<input defaultValue={selected?.qty || ""}/></label><label>Status<select defaultValue={selected?.status || "Preparing"}><option>Preparing</option><option>Ready to ship</option><option>In transit</option><option>Delivered</option><option>Delayed</option></select></label><label>Planned Delivery Date<input defaultValue={selected?.planned || ""}/></label><label>Actual Delivery Date<input defaultValue={selected?.actual || ""}/></label><label>Delivery Terms<input defaultValue={selected?.terms || ""}/></label><label>Carrier<input /></label><label>Tracking Number<input /></label><label className="contact-notes">Delivery Notes<textarea /></label><label>Attachments<input type="file"/></label></div></fieldset></section>;
+    return <section className="related-list"><div className="related-head"><div><h3>Delivery list</h3><p>{items.length} deliveries linked to this customer</p></div><button type="button" onClick={() => setIsNew(true)}>+ New delivery</button></div><div className="table-scroll"><table><thead><tr><th>ID</th><th>Project</th><th>Customer PO</th><th>Item</th><th>Qty</th><th>Status</th><th>Planned date</th><th>Actual date</th></tr></thead><tbody>{items.map(item => <tr key={item.id} className="record-row" onClick={() => setSelected(item)}><td><span className="record-id">{item.id}</span></td><td><strong>{item.project}</strong></td><td>{item.po}</td><td>{item.item}</td><td>{item.qty}</td><td><Status value={item.status}/></td><td>{item.planned}</td><td>{item.actual}</td></tr>)}</tbody></table></div></section>;
 }
-
-function CustomerTasks({announce}:{announce:(message:string)=>void}) {
-  const items:{id:string;title:string;priority:string;status:string;complete:string;owner:string;start:string;due:string;description:string}[]=[];
-  const [selected,setSelected]=useState<(typeof items)[number]|null>(null);
-  if(selected)return <section className="contact-detail"><div className="related-head"><div><button type="button" className="back-link" onClick={()=>setSelected(null)}>&lt;- Task list</button><h3>{selected.title}</h3></div></div><fieldset><legend>Task details</legend><div className="drawer-field-grid"><label>Task ID<input defaultValue={selected.id}/></label><label>Title<input defaultValue={selected.title}/></label><label>Priority<select defaultValue={selected.priority}><option>Low</option><option>Medium</option><option>High</option><option>Urgent</option></select></label><label>Status<select defaultValue={selected.status}><option>Open</option><option>In progress</option><option>Completed</option><option>Cancelled</option></select></label><label>% Complete<input defaultValue={selected.complete}/></label><label>Assigned To<select defaultValue={selected.owner}><option value="">Select TPS employee...</option><option>Alex Morgan</option><option>Sarah Chen</option><option>David Kim</option></select></label><label>Start Date<input defaultValue={selected.start}/></label><label>Due Date<input defaultValue={selected.due}/></label><label className="contact-notes">Description<textarea defaultValue={selected.description}/></label><label>Attachments<input type="file"/></label></div></fieldset></section>;
-  return <section className="related-list"><div className="related-head"><div><h3>Task list</h3><p>{items.length} tasks linked to this customer</p></div><button type="button" onClick={()=>announce("New task form opened")}>+ New task</button></div><div className="table-scroll"><table><thead><tr><th>ID</th><th>Task</th><th>Priority</th><th>Status</th><th>Complete</th><th>Assigned to</th><th>Due date</th></tr></thead><tbody>{items.map(item=><tr key={item.id} className="record-row" onClick={()=>setSelected(item)}><td><span className="record-id">{item.id}</span></td><td><strong>{item.title}</strong></td><td>{item.priority}</td><td><Status value={item.status}/></td><td>{item.complete}</td><td>{item.owner}</td><td>{item.due}</td></tr>)}</tbody></table></div></section>;
+function CustomerTasks({ announce }: {
+    announce: (message: string) => void;
+}) {
+    const items: {
+        id: string;
+        title: string;
+        priority: string;
+        status: string;
+        complete: string;
+        owner: string;
+        start: string;
+        due: string;
+        description: string;
+    }[] = [];
+    const [selected, setSelected] = useState<(typeof items)[number] | null>(null);
+    if (selected)
+        return <section className="contact-detail"><div className="related-head"><div><button type="button" className="back-link" onClick={() => setSelected(null)}>&lt;- Task list</button><h3>{selected.title}</h3></div></div><fieldset><legend>Task details</legend><div className="drawer-field-grid"><label>Task ID<input defaultValue={selected.id}/></label><label>Title<input defaultValue={selected.title}/></label><label>Priority<select defaultValue={selected.priority}><option>Low</option><option>Medium</option><option>High</option><option>Urgent</option></select></label><label>Status<select defaultValue={selected.status}><option>Open</option><option>In progress</option><option>Completed</option><option>Cancelled</option></select></label><label>% Complete<input defaultValue={selected.complete}/></label><label>Assigned To<select defaultValue={selected.owner}><option value="">Select TPS employee...</option><option>Alex Morgan</option><option>Sarah Chen</option><option>David Kim</option></select></label><label>Start Date<input defaultValue={selected.start}/></label><label>Due Date<input defaultValue={selected.due}/></label><label className="contact-notes">Description<textarea defaultValue={selected.description}/></label><label>Attachments<input type="file"/></label></div></fieldset></section>;
+    return <section className="related-list"><div className="related-head"><div><h3>Task list</h3><p>{items.length} tasks linked to this customer</p></div><button type="button" onClick={() => announce("New task form opened")}>+ New task</button></div><div className="table-scroll"><table><thead><tr><th>ID</th><th>Task</th><th>Priority</th><th>Status</th><th>Complete</th><th>Assigned to</th><th>Due date</th></tr></thead><tbody>{items.map(item => <tr key={item.id} className="record-row" onClick={() => setSelected(item)}><td><span className="record-id">{item.id}</span></td><td><strong>{item.title}</strong></td><td>{item.priority}</td><td><Status value={item.status}/></td><td>{item.complete}</td><td>{item.owner}</td><td>{item.due}</td></tr>)}</tbody></table></div></section>;
 }
-
-function Metric({label,value,detail,kind="up"}:{label:string,value:string,detail:string,kind?:string}) { return <article><div className="metric-top"><span>{label}</span><b>{kind==="up"?"+":"!"}</b></div><strong>{value}</strong><p><em className={kind==="warn"?"warning":""}>{detail}</em></p></article>; }
-
-function Overview({navigate,announce,opportunities,clients,tasks}:{navigate:(label:string)=>void,announce:(message:string)=>void,opportunities:Row[],clients:Row[],tasks:Row[]}) {
-  const monthKey=(date:string)=>{const parsed=new Date(date);return Number.isNaN(parsed.getTime())?"Unscheduled":parsed.toLocaleDateString("en-US",{month:"short",year:"numeric"})};
-  const availableMonths=Array.from(new Set(opportunities.map(row=>monthKey(row.date)))).sort((a,b)=>{if(a==="Unscheduled")return 1;if(b==="Unscheduled")return -1;return new Date(`1 ${a}`).getTime()-new Date(`1 ${b}`).getTime()});
-  const currentMonth=new Date().toLocaleDateString("en-US",{month:"short",year:"numeric"});
-  const [opportunityMonth,setOpportunityMonth]=useState(currentMonth);
-  const reportMonth=availableMonths.includes(opportunityMonth)?opportunityMonth:(availableMonths[0]||currentMonth);
-  const monthRecords=opportunities.filter(row=>monthKey(row.date)===reportMonth);
-  const reportStages=["Inquiry","Bidding","Proposal","Negotiation","Ready for delivery","Delivered"];
-  const statusRows=reportStages.map(status=>({status,count:monthRecords.filter(row=>row.status===status).length}));
-  const maxStatusCount=Math.max(1,...statusRows.map(row=>row.count));
-  const biddingProjects=opportunities.filter(row=>row.status==="Bidding");
-  const pipelineValue=opportunities.reduce((total,row)=>total+(Number(row.value.replace(/[^0-9.-]/g,""))||0),0);
-  const openOpportunities=opportunities.filter(row=>!['Delivered','Completed','Closed'].includes(row.status)).length;
-  const dueTasks=tasks.filter(row=>row.status!=="Completed").length;
-  return <>
-  <div className="metrics"><Metric label="Clients" value={String(clients.length)} detail={clients.length?"Client records available":"No clients added yet"}/><Metric label="Open opportunities" value={String(openOpportunities)} detail={openOpportunities?"Active commercial records":"No open opportunities"}/><Metric label="Pipeline value" value={`$${pipelineValue.toLocaleString()}`} detail={pipelineValue?"Current opportunity value":"No pipeline value recorded"}/><Metric label="Tasks due" value={String(dueTasks)} detail={dueTasks?"Open tasks requiring attention":"No tasks due"}/></div>
-  <div className="main-grid"><article className="panel revenue opportunity-status-report"><div className="panel-head"><div><h2>Opportunity status report</h2><p>Live opportunity records grouped by close-date month</p></div><strong>{reportMonth}</strong></div><div className="opportunity-month-filter" aria-label="Select report month">{availableMonths.map(month=><button type="button" key={month} className={month===reportMonth?"active":""} onClick={()=>{setOpportunityMonth(month);announce(`Opportunity status report filtered by ${month}`)}}>{month}</button>)}</div><div className="status-report-bars" aria-label={`Opportunity status for ${reportMonth}`}>{statusRows.map(row=><div className="status-report-row" key={row.status}><span>{row.status}</span><div><i style={{width:row.count?`${Math.max(8,row.count/maxStatusCount*100)}%`:"0%"}}/></div><strong>{row.count}</strong></div>)}</div><p className="status-report-total">{monthRecords.length} total record{monthRecords.length===1?"":"s"} in {reportMonth}</p></article>
-    <article className="panel activity bidding-project-report"><div className="panel-head"><div><h2>Bidding projects</h2><p>Opportunities currently in the bidding stage</p></div><strong>{biddingProjects.length}</strong></div><div className="bidding-project-list">{biddingProjects.map(project=><button type="button" key={project.id} onClick={()=>navigate("Opportunities")}><span className="bidding-project-id">{project.id}</span><strong>{project.name}</strong><small>{project.account}</small><div><span>{project.owner}</span><b>{project.value}</b></div><time>Due {project.date}</time></button>)}{!biddingProjects.length&&<p className="empty">No bidding projects are currently recorded.</p>}</div><button type="button" className="bidding-report-link" onClick={()=>navigate("Opportunities")}>View bidding opportunities -&gt;</button></article></div>
-  <article className="panel customers"><div className="panel-head"><div><h2>Priority clients</h2><p>Your highest-value active clients</p></div><button className="text-link" onClick={() => navigate("Customers")}>View all clients -&gt;</button></div><MiniCustomers clients={clients} /></article>
-  </>; }
-
-function MiniCustomers({clients}:{clients:Row[]}){ return <div className="table-scroll"><table><thead><tr><th>Client</th><th>Primary contact</th><th>Client value</th><th>Status</th></tr></thead><tbody>{clients.map(r=><tr key={r.id}><td><span className="customer-avatar blue">{r.name.split(" ").map(x=>x[0]).join("")}</span><strong>{r.name}</strong></td><td>{r.account}</td><td>{r.value}</td><td><Status value={r.status}/></td></tr>)}</tbody></table>{!clients.length&&<p className="empty">No clients added yet.</p>}</div>; }
-
-function Status({value}:{value:string}) { const positive=["Active","Accepted","Completed","In progress"].includes(value); const warning=["At risk","Expired"].includes(value); return <span className={`status-pill ${positive?"positive":warning?"danger":"neutral"}`}>{value}</span>; }
-
-function RecordsPage({module,query,filter,setFilter,announce,onNewContact,onEditCustomer,onDeleteCommercial,onDeleteContact,onDeleteCustomer,onDeleteEmployee,rowsOverride,sourceCountOverride}:{module:string,query:string,filter:string,setFilter:(x:string)=>void,announce:(x:string)=>void,onNewContact:()=>void,onEditCustomer:(customer:Row)=>void,onDeleteCommercial:(record:Row)=>void,onDeleteContact:(contact:Row)=>void,onDeleteCustomer:(customer:Row)=>void,onDeleteEmployee:(employee:Row)=>void,rowsOverride?:Row[],sourceCountOverride?:number}) {
-  const [listSearch,setListSearch]=useState("");
-  const rows=rowsOverride||records[module]||[]; const statuses=["All statuses",...Array.from(new Set(rows.map(r=>r.status)))];
-  const shown=useMemo(()=>rows.filter(r=>(filter==="All statuses"||r.status===filter)&&Object.values(r).join(" ").toLowerCase().includes(query.toLowerCase())&&Object.values(r).join(" ").toLowerCase().includes(listSearch.toLowerCase())),[rows,query,listSearch,filter]);
-  const flowStages=module==="Opportunities"?["All statuses","Inquiry","Bidding","Proposal","Negotiation","Ready for delivery","Delivered"]:[];
-  const valueLabel=module==="Projects"?"Progress":module==="Contacts"?"Job title":module==="Tasks"?"Priority":"Value";
-  const displayedSourceCount=sourceCountOverride??sourceCounts[module]??rows.length;
-  return <><div className="source-note"><span>CRM database</span><strong>{displayedSourceCount} records</strong><small>TPS CRM</small></div><div className="module-metrics"><Metric label={`Total ${module==="Customers"?"clients":module.toLowerCase()}`} value={String(module==="Opportunities"&&filter!=="All statuses"?shown.length:displayedSourceCount)} detail={module==="Opportunities"&&filter!=="All statuses"?`${filter} opportunities shown`:rows.length?"Saved in TPS CRM":"No records added yet"}/><Metric label="Active this month" value={String(rows.length?Math.max(1,rows.length*9):0)} detail={rows.length?"Current CRM activity":"No activity yet"}/><Metric label={module==="Projects"?"On schedule":module==="Contacts"?"Linked to clients":"Data readiness"} value={rows.length?(module==="Projects"?"86%":module==="Contacts"?"94%":"92%"):"0%"} detail={rows.length?"Validated moments ago":"No records to validate"}/></div>{module==="Opportunities"&&<div className="opportunity-flow-filter" aria-label="Filter opportunities by flow"><div className="flow-filter-head"><div><span>PIPELINE FLOW</span><strong>Filter opportunities by commercial stage</strong></div><button type="button" onClick={()=>setFilter("All statuses")}>Reset flow</button></div><div className="flow-filter-stages">{flowStages.map((stage,index)=>{const count=stage==="All statuses"?rows.length:rows.filter(row=>row.status===stage).length;return <button type="button" key={stage} className={filter===stage?"active":""} onClick={()=>setFilter(stage)}><i>{index===0?"∞":index}</i><span>{stage==="All statuses"?"All":stage}</span><small>{count} record{count===1?"":"s"}</small></button>})}</div></div>}
-    <article className="panel records-panel"><div className="records-toolbar"><div className="segmented"><button className="selected" onClick={()=>setFilter("All statuses")}>All</button><button onClick={()=>setFilter(statuses[1])}>My records</button></div>{["Customers","Suppliers","Projects"].includes(module)&&<label className="list-search">Search<input type="search" value={listSearch} onChange={e=>setListSearch(e.target.value)} placeholder={`Search ${module==="Customers"?"clients":module.toLowerCase()}...`}/></label>}<label>{module==="Opportunities"?"Flow":"Status"}<select value={filter} onChange={e=>setFilter(e.target.value)}>{(module==="Opportunities"?flowStages:statuses).map(x=><option key={x}>{x}</option>)}</select></label><button className="secondary" onClick={()=>announce(`${module} list exported`)}>Download CSV</button></div>
-      <div className="table-scroll"><table><thead><tr><th>ID</th><th>{module==="Customers"?"Client":module.slice(0,-1)}</th><th>Client / contact</th><th>Owner</th><th>{valueLabel}</th><th>Status</th><th>{(module==="Opportunities"||module==="Quotations")?"Close date":"Updated / due"}</th><th></th></tr></thead><tbody>{shown.map(r=><tr key={r.id} className="record-row" onClick={()=>(module==="Customers"||module==="Contacts"||module==="Activities"||module==="Employees"||module==="Tasks"||module==="Suppliers"||module==="Projects"||(module==="Opportunities"||module==="Quotations"))?onEditCustomer(r):announce(`${r.name} details opened`)}><td><span className="record-id">{r.id}</span></td><td><strong>{r.name}</strong></td><td>{r.account}</td><td>{r.owner}</td><td>{r.value}</td><td><Status value={r.status}/></td><td>{r.date}</td><td>{(module==="Customers"||module==="Contacts"||module==="Activities"||module==="Employees"||module==="Tasks"||module==="Suppliers"||module==="Projects"||(module==="Opportunities"||module==="Quotations"))?<div className="row-actions"><button type="button" className="open-record" onClick={e=>{e.stopPropagation();onEditCustomer(r)}}>Edit</button>{(module==="Opportunities"||module==="Quotations")&&<button type="button" className="delete-record" onClick={e=>{e.stopPropagation();onDeleteCommercial(r)}}>Del</button>}{module==="Contacts"&&<button type="button" className="delete-record" onClick={e=>{e.stopPropagation();onDeleteContact(r)}}>Del</button>}{module==="Customers"&&<button type="button" className="delete-record" onClick={e=>{e.stopPropagation();onDeleteCustomer(r)}}>Del</button>}{module==="Employees"&&<button type="button" className="delete-record" onClick={e=>{e.stopPropagation();onDeleteEmployee(r)}}>Del</button>}</div>:<button className="more" aria-label={`Open ${r.name}`} onClick={()=>announce(`${r.name} details opened`)}>...</button>}</td></tr>)}</tbody></table>{!shown.length&&<p className="empty">No records match your search and filters.</p>}</div></article></>;
+function Metric({ label, value, detail, kind = "up" }: {
+    label: string;
+    value: string;
+    detail: string;
+    kind?: string;
+}) { return <article><div className="metric-top"><span>{label}</span><b>{kind === "up" ? "+" : "!"}</b></div><strong>{value}</strong><p><em className={kind === "warn" ? "warning" : ""}>{detail}</em></p></article>; }
+function Overview({ navigate, announce, opportunities, clients, tasks }: {
+    navigate: (label: string) => void;
+    announce: (message: string) => void;
+    opportunities: Row[];
+    clients: Row[];
+    tasks: Row[];
+}) {
+    const monthKey = (date: string) => { const parsed = new Date(date); return Number.isNaN(parsed.getTime()) ? "Unscheduled" : parsed.toLocaleDateString("en-US", { month: "short", year: "numeric" }); };
+    const availableMonths = Array.from(new Set(opportunities.map(row => monthKey(row.date)))).sort((a, b) => { if (a === "Unscheduled")
+        return 1; if (b === "Unscheduled")
+        return -1; return new Date(`1 ${a}`).getTime() - new Date(`1 ${b}`).getTime(); });
+    const currentMonth = new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" });
+    const [opportunityMonth, setOpportunityMonth] = useState(currentMonth);
+    const reportMonth = availableMonths.includes(opportunityMonth) ? opportunityMonth : (availableMonths[0] || currentMonth);
+    const monthRecords = opportunities.filter(row => monthKey(row.date) === reportMonth);
+    const reportStages = ["Inquiry", "Bidding", "Followup", "Won", "Ready for delivery", "Delivered"];
+    const statusRows = reportStages.map(status => ({ status, count: monthRecords.filter(row => row.status === status).length }));
+    const maxStatusCount = Math.max(1, ...statusRows.map(row => row.count));
+    const biddingProjects = opportunities.filter(row => row.status === "Bidding");
+    const pipelineValue = opportunities.reduce((total, row) => total + (Number(row.value.replace(/[^0-9.-]/g, "")) || 0), 0);
+    const openOpportunities = opportunities.filter(row => !['Delivered', 'Completed', 'Closed'].includes(row.status)).length;
+    const dueTasks = tasks.filter(row => row.status !== "Completed").length;
+    return <>
+  <div className="metrics"><Metric label="Clients" value={String(clients.length)} detail={clients.length ? "Client records available" : "No clients added yet"}/><Metric label="Open opportunities" value={String(openOpportunities)} detail={openOpportunities ? "Active commercial records" : "No open opportunities"}/><Metric label="Pipeline value" value={`SAR ${pipelineValue.toLocaleString()}`} detail={pipelineValue ? "Current opportunity value" : "No pipeline value recorded"}/><Metric label="Tasks due" value={String(dueTasks)} detail={dueTasks ? "Open tasks requiring attention" : "No tasks due"}/></div>
+  <div className="main-grid"><article className="panel revenue opportunity-status-report"><div className="panel-head"><div><h2>Opportunity status report</h2><p>Live opportunity records grouped by close-date month</p></div><strong>{reportMonth}</strong></div><div className="opportunity-month-filter" aria-label="Select report month">{availableMonths.map(month => <button type="button" key={month} className={month === reportMonth ? "active" : ""} onClick={() => { setOpportunityMonth(month); announce(`Opportunity status report filtered by ${month}`); }}>{month}</button>)}</div><div className="status-report-bars" aria-label={`Opportunity status for ${reportMonth}`}>{statusRows.map(row => <div className="status-report-row" key={row.status}><span>{row.status}</span><div><i style={{ width: row.count ? `${Math.max(8, row.count / maxStatusCount * 100)}%` : "0%" }}/></div><strong>{row.count}</strong></div>)}</div><p className="status-report-total">{monthRecords.length} total record{monthRecords.length === 1 ? "" : "s"} in {reportMonth}</p></article>
+    <article className="panel activity bidding-project-report"><div className="panel-head"><div><h2>Bidding projects</h2><p>Opportunities currently in the bidding stage</p></div><strong>{biddingProjects.length.toLocaleString()}</strong></div><div className="bidding-project-list">{biddingProjects.map(project => <button type="button" key={project.id} onClick={() => navigate("Opportunities")}><span className="bidding-project-id">{project.id}</span><strong>{project.name}</strong><small>{project.account}</small><div><span>{project.owner}</span><b>{project.value}</b></div><time>Due {project.date}</time></button>)}{!biddingProjects.length && <p className="empty">No bidding projects are currently recorded.</p>}</div><button type="button" className="bidding-report-link" onClick={() => navigate("Opportunities")}>View bidding opportunities -&gt;</button></article></div>
+  <article className="panel customers"><div className="panel-head"><div><h2>Priority clients</h2><p>Your highest-value active clients</p></div><button className="text-link" onClick={() => navigate("Customers")}>View all clients -&gt;</button></div><MiniCustomers clients={clients}/></article>
+  </>;
 }
-
-function CustomerContactList({onNew,announce,onOpenCustomer}:{onNew:()=>void,announce:(x:string)=>void,onOpenCustomer:(customer:Row)=>void}) {
-  const [customerFilter,setCustomerFilter]=useState("All clients");
-  const [customerSearch,setCustomerSearch]=useState("");
-  const contacts:string[][]=[];
-  const customerNames=["All clients",...Array.from(new Set(contacts.map(contact=>contact[1])))];
-  const visibleContacts=contacts.filter(contact=>(customerFilter==="All clients"||contact[1]===customerFilter)&&contact.join(" ").toLowerCase().includes(customerSearch.toLowerCase()));
-  return <article className="panel customer-contact-list"><div className="panel-head"><div><h2>Client contacts</h2><p>{visibleContacts.length} contact{visibleContacts.length===1?"":"s"} linked to {customerFilter==="All clients"?"all client accounts":customerFilter}</p></div><div className="contact-head-actions"><label>Search<input value={customerSearch} onChange={e=>setCustomerSearch(e.target.value)} placeholder="Client or contact..."/></label><label>Client<select value={customerFilter} onChange={e=>setCustomerFilter(e.target.value)}>{customerNames.map(name=><option key={name}>{name}</option>)}</select></label><button className="primary compact" onClick={onNew}><span>+</span>New contact</button></div></div><div className="table-scroll"><table><thead><tr><th>Contact</th><th>Client</th><th>Job title</th><th>Email</th><th>Mobile phone</th><th>Role</th><th></th></tr></thead><tbody>{visibleContacts.map(c=><tr key={c[0]} className="record-row" onClick={()=>announce(`${c[0]} contact opened`)}><td><strong>{c[0]}</strong></td><td><button className="customer-link" onClick={e=>{e.stopPropagation();const customer=records.Customers.find(item=>item.name===c[1]);if(customer)onOpenCustomer(customer);}}>{c[1]}</button></td><td>{c[2]}</td><td><a href={`mailto:${c[3]}`} onClick={e=>e.stopPropagation()}>{c[3]}</a></td><td>{c[4]}</td><td><span className="status-pill neutral">{c[5]}</span></td><td><button className="more">...</button></td></tr>)}</tbody></table>{visibleContacts.length===0&&<p className="empty">No contacts match this client search.</p>}</div></article>;
+function MiniCustomers({ clients }: {
+    clients: Row[];
+}) { return <div className="table-scroll"><table><thead><tr><th>Client</th><th>Primary contact</th><th>Client value</th><th>Status</th></tr></thead><tbody>{clients.map(r => <tr key={r.id}><td><span className="customer-avatar blue">{r.name.split(" ").map(x => x[0]).join("")}</span><strong>{r.name}</strong></td><td>{r.account}</td><td>{r.value}</td><td><Status value={r.status}/></td></tr>)}</tbody></table>{!clients.length && <p className="empty">No clients added yet.</p>}</div>; }
+function Status({ value }: {
+    value: string;
+}) { const positive = ["Active", "Accepted", "Completed", "In progress"].includes(value); const warning = ["At risk", "Expired"].includes(value); return <span className={`status-pill ${positive ? "positive" : warning ? "danger" : "neutral"}`}>{value}</span>; }
+function RecordsPage({ module, query, filter, setFilter, announce, onNewContact, onEditCustomer, onDeleteCommercial, onDeleteContact, onDeleteCustomer, onDeleteEmployee, rowsOverride, sourceCountOverride }: {
+    module: string;
+    query: string;
+    filter: string;
+    setFilter: (x: string) => void;
+    announce: (x: string) => void;
+    onNewContact: () => void;
+    onEditCustomer: (customer: Row) => void;
+    onDeleteCommercial: (record: Row) => void;
+    onDeleteContact: (contact: Row) => void;
+    onDeleteCustomer: (customer: Row) => void;
+    onDeleteEmployee: (employee: Row) => void;
+    rowsOverride?: Row[];
+    sourceCountOverride?: number;
+}) {
+    const [listSearch, setListSearch] = useState("");
+    const rows = rowsOverride || records[module] || [];
+    const statuses = ["All statuses", ...Array.from(new Set(rows.map(r => r.status)))];
+    const shown = useMemo(() => rows.filter(r => (filter === "All statuses" || r.status === filter) && Object.values(r).join(" ").toLowerCase().includes(query.toLowerCase()) && Object.values(r).join(" ").toLowerCase().includes(listSearch.toLowerCase())), [rows, query, listSearch, filter]);
+    const flowStages = module === "Opportunities" ? ["All statuses", "Inquiry", "Bidding", "Followup", "Won", "Ready for delivery", "Delivered"] : [];
+    const valueLabel = module === "Projects" ? "Progress" : module === "Contacts" ? "Job title" : module === "Tasks" ? "Priority" : "Value";
+    const displayedSourceCount = sourceCountOverride ?? sourceCounts[module] ?? rows.length;
+    return <><div className="source-note"><span>CRM database</span><strong>{displayedSourceCount} records</strong><small>TPS CRM</small></div><div className="module-metrics"><Metric label={`Total ${module === "Customers" ? "clients" : module.toLowerCase()}`} value={String(module === "Opportunities" && filter !== "All statuses" ? shown.length : displayedSourceCount)} detail={module === "Opportunities" && filter !== "All statuses" ? `${filter} opportunities shown` : rows.length ? "Saved in TPS CRM" : "No records added yet"}/><Metric label="Active this month" value={String(rows.length ? Math.max(1, rows.length * 9) : 0)} detail={rows.length ? "Current CRM activity" : "No activity yet"}/><Metric label={module === "Projects" ? "On schedule" : module === "Contacts" ? "Linked to clients" : "Data readiness"} value={rows.length ? (module === "Projects" ? "86%" : module === "Contacts" ? "94%" : "92%") : "0%"} detail={rows.length ? "Validated moments ago" : "No records to validate"}/></div>{module === "Opportunities" && <div className="opportunity-flow-filter" aria-label="Filter opportunities by flow"><div className="flow-filter-head"><div><span>PIPELINE FLOW</span><strong>Filter opportunities by commercial stage</strong></div><button type="button" onClick={() => setFilter("All statuses")}>Reset flow</button></div><div className="flow-filter-stages">{flowStages.map((stage, index) => { const count = stage === "All statuses" ? rows.length : rows.filter(row => row.status === stage).length; return <button type="button" key={stage} className={filter === stage ? "active" : ""} onClick={() => setFilter(stage)}><i>{index === 0 ? "∞" : index}</i><span>{stage === "All statuses" ? "All" : stage}</span><small>{count} record{count === 1 ? "" : "s"}</small></button>; })}</div></div>}
+    <article className="panel records-panel"><div className="records-toolbar"><div className="segmented"><button className="selected" onClick={() => setFilter("All statuses")}>All</button><button onClick={() => setFilter(statuses[1])}>My records</button></div>{["Customers", "Suppliers", "Projects"].includes(module) && <label className="list-search">Search<input type="search" value={listSearch} onChange={e => setListSearch(e.target.value)} placeholder={`Search ${module === "Customers" ? "clients" : module.toLowerCase()}...`}/></label>}<label>{module === "Opportunities" ? "Flow" : "Status"}<select value={filter} onChange={e => setFilter(e.target.value)}>{(module === "Opportunities" ? flowStages : statuses).map(x => <option key={x}>{x}</option>)}</select></label><button className="secondary" onClick={() => announce(`${module} list exported`)}>Download CSV</button></div>
+      <div className="table-scroll"><table><thead><tr><th>ID</th><th>{module === "Customers" ? "Client" : module.slice(0, -1)}</th><th>Client / contact</th><th>Owner</th><th>{valueLabel}</th><th>Status</th><th>{(module === "Opportunities" || module === "Quotations") ? "Close date" : "Updated / due"}</th><th></th></tr></thead><tbody>{shown.map(r => <tr key={r.id} className="record-row" onClick={() => (module === "Customers" || module === "Contacts" || module === "Activities" || module === "Employees" || module === "Tasks" || module === "Suppliers" || module === "Projects" || (module === "Opportunities" || module === "Quotations")) ? onEditCustomer(r) : announce(`${r.name} details opened`)}><td><span className="record-id">{r.id}</span></td><td><strong>{r.name}</strong></td><td>{r.account}</td><td>{r.owner}</td><td>{r.value}</td><td><Status value={r.status}/></td><td>{r.date}</td><td>{(module === "Customers" || module === "Contacts" || module === "Activities" || module === "Employees" || module === "Tasks" || module === "Suppliers" || module === "Projects" || (module === "Opportunities" || module === "Quotations")) ? <div className="row-actions"><button type="button" className="open-record" onClick={e => { e.stopPropagation(); onEditCustomer(r); }}>Edit</button>{(module === "Opportunities" || module === "Quotations") && <button type="button" className="delete-record" onClick={e => { e.stopPropagation(); onDeleteCommercial(r); }}>Del</button>}{module === "Contacts" && <button type="button" className="delete-record" onClick={e => { e.stopPropagation(); onDeleteContact(r); }}>Del</button>}{module === "Customers" && <button type="button" className="delete-record" onClick={e => { e.stopPropagation(); onDeleteCustomer(r); }}>Del</button>}{module === "Employees" && <button type="button" className="delete-record" onClick={e => { e.stopPropagation(); onDeleteEmployee(r); }}>Del</button>}</div> : <button className="more" aria-label={`Open ${r.name}`} onClick={() => announce(`${r.name} details opened`)}>...</button>}</td></tr>)}</tbody></table>{!shown.length && <p className="empty">No records match your search and filters.</p>}</div></article></>;
 }
-
-function Reports({announce}:{announce:(x:string)=>void}) { const [range,setRange]=useState("This quarter"); const [selectedReport,setSelectedReport]=useState("Sales performance"); return <><div className="report-controls"><label>Reporting period<select value={range} onChange={e=>setRange(e.target.value)}><option>This month</option><option>This quarter</option><option>This year</option></select></label><button className="secondary" onClick={()=>announce(`Reports refreshed for ${range}`)}>Refresh data</button></div>
+function CustomerContactList({ onNew, announce, onOpenCustomer }: {
+    onNew: () => void;
+    announce: (x: string) => void;
+    onOpenCustomer: (customer: Row) => void;
+}) {
+    const [customerFilter, setCustomerFilter] = useState("All clients");
+    const [customerSearch, setCustomerSearch] = useState("");
+    const contacts: string[][] = [];
+    const customerNames = ["All clients", ...Array.from(new Set(contacts.map(contact => contact[1])))];
+    const visibleContacts = contacts.filter(contact => (customerFilter === "All clients" || contact[1] === customerFilter) && contact.join(" ").toLowerCase().includes(customerSearch.toLowerCase()));
+    return <article className="panel customer-contact-list"><div className="panel-head"><div><h2>Client contacts</h2><p>{visibleContacts.length} contact{visibleContacts.length === 1 ? "" : "s"} linked to {customerFilter === "All clients" ? "all client accounts" : customerFilter}</p></div><div className="contact-head-actions"><label>Search<input value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} placeholder="Client or contact..."/></label><label>Client<select value={customerFilter} onChange={e => setCustomerFilter(e.target.value)}>{customerNames.map(name => <option key={name}>{name}</option>)}</select></label><button className="primary compact" onClick={onNew}><span>+</span>New contact</button></div></div><div className="table-scroll"><table><thead><tr><th>Contact</th><th>Client</th><th>Job title</th><th>Email</th><th>Mobile phone</th><th>Role</th><th></th></tr></thead><tbody>{visibleContacts.map(c => <tr key={c[0]} className="record-row" onClick={() => announce(`${c[0]} contact opened`)}><td><strong>{c[0]}</strong></td><td><button className="customer-link" onClick={e => { e.stopPropagation(); const customer = records.Customers.find(item => item.name === c[1]); if (customer)
+        onOpenCustomer(customer); }}>{c[1]}</button></td><td>{c[2]}</td><td><a href={`mailto:${c[3]}`} onClick={e => e.stopPropagation()}>{c[3]}</a></td><td>{c[4]}</td><td><span className="status-pill neutral">{c[5]}</span></td><td><button className="more">...</button></td></tr>)}</tbody></table>{visibleContacts.length === 0 && <p className="empty">No contacts match this client search.</p>}</div></article>;
+}
+function Reports({ announce }: {
+    announce: (x: string) => void;
+}) {
+    const [range, setRange] = useState("This quarter");
+    const [selectedReport, setSelectedReport] = useState("Sales performance");
+    return <><div className="report-controls"><label>Reporting period<select value={range} onChange={e => setRange(e.target.value)}><option>This month</option><option>This quarter</option><option>This year</option></select></label><button className="secondary" onClick={() => announce(`Reports refreshed for ${range}`)}>Refresh data</button></div>
   <div className="metrics"><Metric label="Revenue" value="$0" detail="No sales recorded"/><Metric label="Win rate" value="0%" detail="No opportunities recorded"/><Metric label="Average deal" value="$0" detail="No deals recorded"/><Metric label="Sales cycle" value="0 days" detail="No completed sales"/></div>
   <div className="reports-grid"><article className="panel"><div className="panel-head"><div><h2>Pipeline by stage</h2><p>Opportunity value and conversion</p></div></div><p className="empty">No opportunity data yet.</p></article>
     <article className="panel"><div className="panel-head"><div><h2>Revenue by owner</h2><p>Closed-won performance</p></div></div><p className="empty">No revenue data yet.</p></article></div>
-  <article className="panel report-library"><div className="panel-head"><div><h2>Report library</h2><p>Ready-to-use operational reports</p></div></div><div className="report-cards">{["Sales performance","Client health","Project delivery","Opportunity conversion"].map((x,i)=><button key={x} className={selectedReport===x?"selected":""} onClick={()=>setSelectedReport(x)}><span>R{i+1}</span><div><strong>{x}</strong><small>Updated today</small></div><b>-&gt;</b></button>)}</div></article><ReportDetail name={selectedReport} range={range}/></> }
-
-function ReportDetail({name,range}:{name:string,range:string}) {
-  const rows:Record<string,string[][]>={
-    "Sales performance":[],
-    "Client health":[],
-    "Project delivery":[],
-    "Opportunity conversion":[],
-  };
-  const headings=name==="Sales performance"?["Owner","Revenue","Deals","Win rate"]:name==="Client health"?["Client","Status","Health score","Risk"]:name==="Project delivery"?["Project","Progress","Delivery status","Due date"]:["Stage","Records","Value","Conversion"];
-  const printReport=()=>{const report=document.querySelector(".report-detail");if(!report)return;const printWindow=window.open("","_blank","width=960,height=720");if(!printWindow){window.print();return}printWindow.document.write(`<!doctype html><html><head><title>${name} - ${range}</title><style>body{font-family:Arial,sans-serif;margin:36px;color:#161616}article{border-top:4px solid #161616}.panel-head{display:flex;justify-content:space-between;align-items:end;padding:18px 0;border-bottom:1px solid #c6c6c6}.panel-head h2{margin:0 0 6px;font-size:24px}.panel-head p{margin:0;color:#525252}.panel-head button{display:none}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{padding:12px;border-bottom:1px solid #d6d6d6;text-align:left;font-size:12px}th{background:#f4f4f4}@media print{body{margin:0}}</style></head><body>${report.outerHTML}</body></html>`);printWindow.document.close();printWindow.focus();setTimeout(()=>printWindow.print(),150)};
-  return <article className="panel report-detail"><div className="panel-head"><div><h2>{name}</h2><p>{range} · Updated today</p></div><button type="button" className="secondary" onClick={printReport}>Print report</button></div><div className="table-scroll"><table><thead><tr>{headings.map(heading=><th key={heading}>{heading}</th>)}</tr></thead><tbody>{rows[name].map((row,index)=><tr key={`${name}-${index}`}>{row.map(value=><td key={value}>{value}</td>)}</tr>)}</tbody></table></div></article>;
+  <article className="panel report-library"><div className="panel-head"><div><h2>Report library</h2><p>Ready-to-use operational reports</p></div></div><div className="report-cards">{["Sales performance", "Client health", "Project delivery", "Opportunity conversion"].map((x, i) => <button key={x} className={selectedReport === x ? "selected" : ""} onClick={() => setSelectedReport(x)}><span>R{i + 1}</span><div><strong>{x}</strong><small>Updated today</small></div><b>-&gt;</b></button>)}</div></article><ReportDetail name={selectedReport} range={range}/></>;
 }
-
-function Directory({announce,targetGroup,equipmentValues,onEquipmentChange,projectTypeValues,onProjectTypeChange}:{announce:(x:string)=>void,targetGroup:string,equipmentValues:string[],onEquipmentChange:Dispatch<SetStateAction<string[]>>,projectTypeValues:string[],onProjectTypeChange:Dispatch<SetStateAction<string[]>>}) {
-  const groups=[
-    {code:"RG",color:"blue",title:"Regions",count:3,detail:"Regional sales territories"},
-    {code:"BR",color:"cyan",title:"Branches",count:3,detail:"Client-linked branch facilities"},
-    {code:"EU",color:"purple",title:"End users",count:28,detail:"Referenced project owners"},
-    {code:"CT",color:"green",title:"Account categories",count:4,detail:"Separate client and supplier classifications"},
-    {code:"CO",color:"orange",title:"Countries & states",count:4,detail:"Address lookup tables"},
-    {code:"PT",color:"purple",title:"Project types",count:projectTypeValues.length,detail:"Supply and service project classifications"},
-    {code:"EQ",color:"cyan",title:"Equipment",count:6,detail:"Commercial equipment lookup values"},
-    {code:"DT",color:"blue",title:"Document types",count:9,detail:"Opportunity document type lookup values"},
-    {code:"OT",color:"green",title:"Opportunity types",count:6,detail:"Commercial opportunity type lookup values"},
-    {code:"SE",color:"red",title:"System settings",count:4,detail:"Application preferences"},
-  ];
-  const directoryRows:Record<string,string[][]>={
-    Regions:[["RG-01","Central Region","Riyadh","Active"],["RG-02","Eastern Region","Dammam","Active"],["RG-03","Western Region","Jeddah","Active"]],
-    Branches:[["BR-01","Riyadh Office","Central Region","Active"],["BR-02","Dammam Service Center","Eastern Region","Active"],["BR-03","Jeddah Branch","Western Region","Active"]],
-    "End users":[["EU-028","Saudi Water Authority","Government","Active"],["EU-027","National Grid SA","Utilities","Active"],["EU-026","Maaden Operations","Industrial","Active"]],
-    "Account categories":[["CAT-01","Client","Client records only","Active"],["CAT-02","Supplier","Supplier records only","Active"],["CAT-03","Consultant","External advisor","Active"],["CAT-04","Competitor","Market reference","Active"]],
-    "Countries & states":[["SA-RI","Saudi Arabia","Riyadh","Active"],["SA-EP","Saudi Arabia","Eastern Province","Active"],["SA-MK","Saudi Arabia","Makkah","Active"],["AE-DU","United Arab Emirates","Dubai","Active"]],
-    Equipment:equipmentValues.map((name,index)=>[`EQ-${String(index+1).padStart(3,"0")}`,name,"Commercial equipment","Active"]),
-    "Document types":selectValues("Document Type").map((name,index)=>[`DT-${String(index+1).padStart(2,"0")}`,name,"Opportunity document","Active"]),
-    "Opportunity types":selectValues("Opportunity Type").map((name,index)=>[`OT-${String(index+1).padStart(2,"0")}`,name,"Commercial opportunity","Active"]),
-    "Project types":projectTypeValues.map((name,index)=>[`PT-${String(index+1).padStart(2,"0")}`,name,"Project classification","Active"]),
-    "System settings":[["SET-01","Default currency","SAR","Enabled"],["SET-02","Default user","Alex Morgan","Enabled"],["SET-03","Date format","DD/MM/YYYY","Enabled"],["SET-04","Notifications","On","Enabled"]],
-  };
-  const [activeGroup,setActiveGroup]=useState(()=>groups.find(group=>group.title===targetGroup)||groups[0]);
-  useEffect(()=>{const target=groups.find(group=>group.title===targetGroup);if(target)setActiveGroup(target)},[targetGroup]);
-  const [selectedRow,setSelectedRow]=useState<string[]|null>(null);
-  const [directoryData,setDirectoryData]=useState<Record<string,string[][]>>(directoryRows);
-  useEffect(()=>{const group=groups.find(item=>item.title===targetGroup);if(group){setActiveGroup(group);setSelectedRow(null)}},[targetGroup]);
-  const rows=directoryData[activeGroup.title]||[];
-  const updateDirectoryField=(index:number,value:string)=>setSelectedRow(row=>row?row.map((item,itemIndex)=>itemIndex===index?value:item):row);
-  const saveDirectoryRecord=()=>{
-    if(!selectedRow?.[1].trim()){announce("Enter a name before saving");return}
-    const existingIndex=rows.findIndex(row=>row[0]===selectedRow[0]&&selectedRow[0]);
-    const prefix=rows[0]?.[0].split("-")[0]||activeGroup.code;
-    const width=rows[0]?.[0].split("-")[1]?.length||2;
-    const record=[selectedRow[0]||`${prefix}-${String(rows.length+1).padStart(width,"0")}`,selectedRow[1].trim(),selectedRow[2].trim(),selectedRow[3]||"Active"];
-    const nextRows=existingIndex>=0?rows.map((row,index)=>index===existingIndex?record:row):[...rows,record];
-    setDirectoryData(data=>({...data,[activeGroup.title]:nextRows}));
-    if(activeGroup.title==="Equipment"){const values=nextRows.map(row=>row[1]);onEquipmentChange(values);window.localStorage.setItem("tps-equipment-values",JSON.stringify(values))}
-    if(activeGroup.title==="Project types"){const values=nextRows.map(row=>row[1]);onProjectTypeChange(values);window.localStorage.setItem("tps-project-type-values",JSON.stringify(values))}
-    setSelectedRow(null);announce(`${activeGroup.title} information saved`);
-  };
-  return <><div className="source-note"><span>Access database</span><strong>Reference and lookup facilities</strong><small>Live prototype mapping</small></div><div className="directory-grid">{groups.map(g=><button key={g.title} className={activeGroup.title===g.title?"selected":""} onClick={()=>{setActiveGroup(g);setSelectedRow(null);announce(`${g.title} directory opened`)}}><span className={`directory-icon ${g.color}`}>{g.code}</span><div><small>{directoryData[g.title]?.length||0} records</small><h2>{g.title}</h2><p>{g.detail}</p></div><b>-&gt;</b></button>)}</div><article className="panel directory-records"><div className="panel-head"><div><h2>{activeGroup.title}</h2><p>{activeGroup.detail}</p></div><button className="secondary" onClick={()=>{setSelectedRow(["","","","Active"]);announce(`New ${activeGroup.title} record form opened`)}}>+ New record</button></div>{selectedRow?<fieldset><legend>{selectedRow[1]||`New ${activeGroup.title} record`}</legend><div className="drawer-field-grid"><label>Record ID<input value={selectedRow[0]} onChange={event=>updateDirectoryField(0,event.target.value)} placeholder="Generated automatically"/></label><label>Name<input value={selectedRow[1]} onChange={event=>updateDirectoryField(1,event.target.value)}/></label><label>Value / Region<input value={selectedRow[2]} onChange={event=>updateDirectoryField(2,event.target.value)}/></label><label>Status<select value={selectedRow[3]} onChange={event=>updateDirectoryField(3,event.target.value)}><option>Active</option><option>Enabled</option><option>Inactive</option></select></label></div><div className="directory-actions"><button onClick={()=>setSelectedRow(null)}>Back to list</button><button onClick={saveDirectoryRecord}>{rows.some(row=>row[0]===selectedRow[0]&&selectedRow[0])?"Save changes":"Add record"}</button></div></fieldset>:<div className="table-scroll"><table><thead><tr><th>ID</th><th>Name</th><th>Value / Region</th><th>Status</th></tr></thead><tbody>{rows.map(row=><tr key={row[0]} className="record-row" onClick={()=>setSelectedRow([...row])}><td><span className="record-id">{row[0]}</span></td><td><strong>{row[1]}</strong></td><td>{row[2]}</td><td><Status value={row[3]}/></td></tr>)}</tbody></table></div>}</article></>;
+function ReportDetail({ name, range }: {
+    name: string;
+    range: string;
+}) {
+    const rows: Record<string, string[][]> = {
+        "Sales performance": [],
+        "Client health": [],
+        "Project delivery": [],
+        "Opportunity conversion": [],
+    };
+    const headings = name === "Sales performance" ? ["Owner", "Revenue", "Deals", "Win rate"] : name === "Client health" ? ["Client", "Status", "Health score", "Risk"] : name === "Project delivery" ? ["Project", "Progress", "Delivery status", "Due date"] : ["Stage", "Records", "Value", "Conversion"];
+    const printReport = () => { const report = document.querySelector(".report-detail"); if (!report)
+        return; const printWindow = window.open("", "_blank", "width=960,height=720"); if (!printWindow) {
+        window.print();
+        return;
+    } printWindow.document.write(`<!doctype html><html><head><title>${name} - ${range}</title><style>body{font-family:Arial,sans-serif;margin:36px;color:#161616}article{border-top:4px solid #161616}.panel-head{display:flex;justify-content:space-between;align-items:end;padding:18px 0;border-bottom:1px solid #c6c6c6}.panel-head h2{margin:0 0 6px;font-size:24px}.panel-head p{margin:0;color:#525252}.panel-head button{display:none}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{padding:12px;border-bottom:1px solid #d6d6d6;text-align:left;font-size:12px}th{background:#f4f4f4}@media print{body{margin:0}}</style></head><body>${report.outerHTML}</body></html>`); printWindow.document.close(); printWindow.focus(); setTimeout(() => printWindow.print(), 150); };
+    return <article className="panel report-detail"><div className="panel-head"><div><h2>{name}</h2><p>{range} · Updated today</p></div><button type="button" className="secondary" onClick={printReport}>Print report</button></div><div className="table-scroll"><table><thead><tr>{headings.map(heading => <th key={heading}>{heading}</th>)}</tr></thead><tbody>{rows[name].map((row, index) => <tr key={`${name}-${index}`}>{row.map(value => <td key={value}>{value}</td>)}</tr>)}</tbody></table></div></article>;
 }
-
+function Directory({ announce, targetGroup, equipmentValues, onEquipmentChange, projectTypeValues, onProjectTypeChange }: {
+    announce: (x: string) => void;
+    targetGroup: string;
+    equipmentValues: string[];
+    onEquipmentChange: Dispatch<SetStateAction<string[]>>;
+    projectTypeValues: string[];
+    onProjectTypeChange: Dispatch<SetStateAction<string[]>>;
+}) {
+    const groups = [
+        { code: "RG", color: "blue", title: "Regions", count: 3, detail: "Regional sales territories" },
+        { code: "BR", color: "cyan", title: "Branches", count: 3, detail: "Client-linked branch facilities" },
+        { code: "EU", color: "purple", title: "End users", count: 28, detail: "Referenced project owners" },
+        { code: "CT", color: "green", title: "Account categories", count: 4, detail: "Separate client and supplier classifications" },
+        { code: "CO", color: "orange", title: "Countries & states", count: 4, detail: "Address lookup tables" },
+        { code: "PT", color: "purple", title: "Project types", count: projectTypeValues.length, detail: "Supply and service project classifications" },
+        { code: "EQ", color: "cyan", title: "Equipment", count: 6, detail: "Commercial equipment lookup values" },
+        { code: "DT", color: "blue", title: "Document types", count: 9, detail: "Opportunity document type lookup values" },
+        { code: "OT", color: "green", title: "Opportunity types", count: 6, detail: "Commercial opportunity type lookup values" },
+        { code: "SE", color: "red", title: "System settings", count: 4, detail: "Application preferences" },
+    ];
+    const directoryRows: Record<string, string[][]> = {
+        Regions: [["RG-01", "Central Region", "Riyadh", "Active"], ["RG-02", "Eastern Region", "Dammam", "Active"], ["RG-03", "Western Region", "Jeddah", "Active"]],
+        Branches: [["BR-01", "Riyadh Office", "Central Region", "Active"], ["BR-02", "Dammam Service Center", "Eastern Region", "Active"], ["BR-03", "Jeddah Branch", "Western Region", "Active"]],
+        "End users": [["EU-028", "Saudi Water Authority", "Government", "Active"], ["EU-027", "National Grid SA", "Utilities", "Active"], ["EU-026", "Maaden Operations", "Industrial", "Active"]],
+        "Account categories": [["CAT-01", "Client", "Client records only", "Active"], ["CAT-02", "Supplier", "Supplier records only", "Active"], ["CAT-03", "Consultant", "External advisor", "Active"], ["CAT-04", "Competitor", "Market reference", "Active"]],
+        "Countries & states": [["SA-RI", "Saudi Arabia", "Riyadh", "Active"], ["SA-EP", "Saudi Arabia", "Eastern Province", "Active"], ["SA-MK", "Saudi Arabia", "Makkah", "Active"], ["AE-DU", "United Arab Emirates", "Dubai", "Active"]],
+        Equipment: equipmentValues.map((name, index) => [`EQ-${String(index + 1).padStart(3, "0")}`, name, "Commercial equipment", "Active"]),
+        "Document types": selectValues("Document Type").map((name, index) => [`DT-${String(index + 1).padStart(2, "0")}`, name, "Opportunity document", "Active"]),
+        "Opportunity types": selectValues("Opportunity Type").map((name, index) => [`OT-${String(index + 1).padStart(2, "0")}`, name, "Commercial opportunity", "Active"]),
+        "Project types": projectTypeValues.map((name, index) => [`PT-${String(index + 1).padStart(2, "0")}`, name, "Project classification", "Active"]),
+        "System settings": [["SET-01", "Default currency", "SAR", "Enabled"], ["SET-02", "Default user", "Alex Morgan", "Enabled"], ["SET-03", "Date format", "DD/MM/YYYY", "Enabled"], ["SET-04", "Notifications", "On", "Enabled"]],
+    };
+    const [activeGroup, setActiveGroup] = useState(() => groups.find(group => group.title === targetGroup) || groups[0]);
+    useEffect(() => { const target = groups.find(group => group.title === targetGroup); if (target)
+        setActiveGroup(target); }, [targetGroup]);
+    const [selectedRow, setSelectedRow] = useState<string[] | null>(null);
+    const [directoryData, setDirectoryData] = useState<Record<string, string[][]>>(directoryRows);
+    useEffect(() => { const group = groups.find(item => item.title === targetGroup); if (group) {
+        setActiveGroup(group);
+        setSelectedRow(null);
+    } }, [targetGroup]);
+    const rows = directoryData[activeGroup.title] || [];
+    const updateDirectoryField = (index: number, value: string) => setSelectedRow(row => row ? row.map((item, itemIndex) => itemIndex === index ? value : item) : row);
+    const saveDirectoryRecord = () => {
+        if (!selectedRow?.[1].trim()) {
+            announce("Enter a name before saving");
+            return;
+        }
+        const existingIndex = rows.findIndex(row => row[0] === selectedRow[0] && selectedRow[0]);
+        const prefix = rows[0]?.[0].split("-")[0] || activeGroup.code;
+        const width = rows[0]?.[0].split("-")[1]?.length || 2;
+        const record = [selectedRow[0] || `${prefix}-${String(rows.length + 1).padStart(width, "0")}`, selectedRow[1].trim(), selectedRow[2].trim(), selectedRow[3] || "Active"];
+        const nextRows = existingIndex >= 0 ? rows.map((row, index) => index === existingIndex ? record : row) : [...rows, record];
+        setDirectoryData(data => ({ ...data, [activeGroup.title]: nextRows }));
+        if (activeGroup.title === "Equipment") {
+            const values = nextRows.map(row => row[1]);
+            onEquipmentChange(values);
+            window.localStorage.setItem("tps-equipment-values", JSON.stringify(values));
+        }
+        if (activeGroup.title === "Project types") {
+            const values = nextRows.map(row => row[1]);
+            onProjectTypeChange(values);
+            window.localStorage.setItem("tps-project-type-values", JSON.stringify(values));
+        }
+        setSelectedRow(null);
+        announce(`${activeGroup.title} information saved`);
+    };
+    return <><div className="source-note"><span>Access database</span><strong>Reference and lookup facilities</strong><small>Live prototype mapping</small></div><div className="directory-grid">{groups.map(g => <button key={g.title} className={activeGroup.title === g.title ? "selected" : ""} onClick={() => { setActiveGroup(g); setSelectedRow(null); announce(`${g.title} directory opened`); }}><span className={`directory-icon ${g.color}`}>{g.code}</span><div><small>{directoryData[g.title]?.length || 0} records</small><h2>{g.title}</h2><p>{g.detail}</p></div><b>-&gt;</b></button>)}</div><article className="panel directory-records"><div className="panel-head"><div><h2>{activeGroup.title}</h2><p>{activeGroup.detail}</p></div><button className="secondary" onClick={() => { setSelectedRow(["", "", "", "Active"]); announce(`New ${activeGroup.title} record form opened`); }}>+ New record</button></div>{selectedRow ? <fieldset><legend>{selectedRow[1] || `New ${activeGroup.title} record`}</legend><div className="drawer-field-grid"><label>Record ID<input value={selectedRow[0]} onChange={event => updateDirectoryField(0, event.target.value)} placeholder="Generated automatically"/></label><label>Name<input value={selectedRow[1]} onChange={event => updateDirectoryField(1, event.target.value)}/></label><label>Value / Region<input value={selectedRow[2]} onChange={event => updateDirectoryField(2, event.target.value)}/></label><label>Status<select value={selectedRow[3]} onChange={event => updateDirectoryField(3, event.target.value)}><option>Active</option><option>Enabled</option><option>Inactive</option></select></label></div><div className="directory-actions"><button onClick={() => setSelectedRow(null)}>Back to list</button><button onClick={saveDirectoryRecord}>{rows.some(row => row[0] === selectedRow[0] && selectedRow[0]) ? "Save changes" : "Add record"}</button></div></fieldset> : <div className="table-scroll"><table><thead><tr><th>ID</th><th>Name</th><th>Value / Region</th><th>Status</th></tr></thead><tbody>{rows.map(row => <tr key={row[0]} className="record-row" onClick={() => setSelectedRow([...row])}><td><span className="record-id">{row[0]}</span></td><td><strong>{row[1]}</strong></td><td>{row[2]}</td><td><Status value={row[3]}/></td></tr>)}</tbody></table></div>}</article></>;
+}
 const customerPages = [
-  {name:"General",icon:"G",groups:[
-    ["Identity",["Client Name","Client Name - Arabic","Client Number","Client Type","Handled by","FLAG"]],
-    ["Contact",["Phone","Fax","Email","Website"]],
-    ["Main address",["Address","City","Province","Postal Code","Country / Region"]],
-    ["Registration & tax",["CR NO","CR DATE","CR VALIDITY","VAT NO","NATIONAL ADDRESS"]],
-  ]},
-  {name:"Contacts",icon:"C",groups:[["Client contacts",["First Name","Last Name","Full Name","Job Title","Department","Business Phone","Home Phone","Mobile Phone","Fax Number","E-mail Address","Category","Notes"]]]},
-  {name:"Opportunities",icon:"O",groups:[
-    ["Opportunity",["Project Name","Opportunity Type","Inquiry No / RFQ No","Inquiry Date","Inquiry Submission Date","Employee","Category","Rating","Consultant","End User"]],
-    ["Commercial",["Supplier Name","Supplier Offer #","Supplier Offer Date","Supplier Offer Value","TPS Offer #","Offer Date","Currency","Offer Value","Scope of Work"]],
-    ["Status & follow-up",["Project Status","Status of Call","Submitted","Last Call","Next Call","Comments"]],
-  ]},
-  {name:"Projects",icon:"P",groups:[]},
-  {name:"Delivery",icon:"DL",groups:[]},
-  {name:"Suppliers",icon:"SU",groups:[]},
-  {name:"Activities",icon:"A",groups:[["Client activity",["Activity Type","Activity Date","Description","Notes","Attachments"]]]},
-  {name:"Tasks",icon:"T",groups:[["Account task",["Title","Priority","Status","% Complete","Assigned To","Description","Start Date","Due Date","Completed Date","Attachments"]]]},
-  {name:"Documents",icon:"D",groups:[
-    ["Company documents",["Client LOGO","CR COPY","VAT COPY","NATIONAL ADDRESS"]],
-    ["Commercial attachments",["Pricing Sheet","Supplier Offer Attachment","Offer Attachment","Other Attachments"]],
-    ["Billing address",["Billing Street","Billing City","Billing Postal","Billing Country"]],
-    ["Shipping address",["Shipping Street","Shipping City","Shipping Postal","Shipping Country"]],
-  ]},
+    { name: "General", icon: "G", groups: [
+            ["Identity", ["Client Name", "Client Name - Arabic", "Client Number", "Client Type", "Handled by", "FLAG"]],
+            ["Contact", ["Phone", "Fax", "Email", "Website"]],
+            ["Main address", ["Address", "City", "Province", "Postal Code", "Country / Region"]],
+            ["Registration & tax", ["CR NO", "CR DATE", "CR VALIDITY", "VAT NO", "NATIONAL ADDRESS"]],
+        ] },
+    { name: "Contacts", icon: "C", groups: [["Client contacts", ["First Name", "Last Name", "Full Name", "Job Title", "Department", "Business Phone", "Home Phone", "Mobile Phone", "Fax Number", "E-mail Address", "Category", "Notes"]]] },
+    { name: "Opportunities", icon: "O", groups: [
+            ["Opportunity", ["Project Name", "Opportunity Type", "Inquiry No / RFQ No", "Inquiry Date", "Inquiry Submission Date", "Employee", "Category", "Rating", "Consultant", "End User"]],
+            ["Commercial", ["Supplier Name", "Supplier Offer #", "Supplier Offer Date", "Supplier Offer Value", "TPS Offer #", "Offer Date", "Currency", "Offer Value", "Scope of Work"]],
+            ["Status & follow-up", ["Project Status", "Status of Call", "Submitted", "Last Call", "Next Call", "Comments"]],
+        ] },
+    { name: "Projects", icon: "P", groups: [] },
+    { name: "Delivery", icon: "DL", groups: [] },
+    { name: "Suppliers", icon: "SU", groups: [] },
+    { name: "Activities", icon: "A", groups: [["Client activity", ["Activity Type", "Activity Date", "Description", "Notes", "Attachments"]]] },
+    { name: "Tasks", icon: "T", groups: [["Account task", ["Title", "Priority", "Status", "% Complete", "Assigned To", "Description", "Start Date", "Due Date", "Completed Date", "Attachments"]]] },
+    { name: "Documents", icon: "D", groups: [
+            ["Company documents", ["Client LOGO", "CR COPY", "VAT COPY", "NATIONAL ADDRESS"]],
+            ["Commercial attachments", ["Pricing Sheet", "Supplier Offer Attachment", "Offer Attachment", "Other Attachments"]],
+            ["Billing address", ["Billing Street", "Billing City", "Billing Postal", "Billing Country"]],
+            ["Shipping address", ["Shipping Street", "Shipping City", "Shipping Postal", "Shipping Country"]],
+        ] },
 ];
-
 const accessPages = [
-  {name:"Client List",source:"Accounts",count:338,icon:"CU",color:"purple",groups:[
-    ["Identity",["AccountID","Account Name","Account Name - Arabic","Account Number","Account Type","Category","Handled by","FLAG"]],
-    ["Contact",["Phone","Mobile Phone","Fax","Email","Website"]],
-    ["Main address",["Address","City","Province","Postal Code","Country / Region"]],
-    ["Billing address",["Billing Street","Billing City","Billing Postal","Billing Country"]],
-    ["Shipping address",["Shipping Street","Shipping City","Shipping Postal","Shipping Country"]],
-    ["Follow-up",["Call Status","Call Date / Visit Date","Next Call / Next Visit","Comments","Notes","Attachments"]],
-    ["Registration & tax",["CR NO","CR DATE","CR VALIDITY","CR COPY","VAT NO","VAT COPY","NATIONAL ADDRESS"]],
-    ["Commercial",["Supplier Scope","Scope of work","Client LOGO"]],
-  ]},
-  {name:"Contact Details",source:"Contacts Extended",count:986,icon:"CO",color:"cyan",groups:[
-    ["General",["ContactID","First Name","Last Name","Full Name","Company","Job Title","Department","Project Name","Category","FLAG"]],
-    ["Phone numbers",["Business Phone","Home Phone","Mobile Phone","Fax Number"]],
-    ["Address",["Street","City","Province","ZIP / Postal Code","Country / Region"]],
-    ["Online & notes",["E-mail Address","Web Page","Notes","Attachments"]],
-  ]},
-  {name:"Maintain Offers",source:"Opportunities Extended",count:171,icon:"OP",color:"green",groups:[
-    ["Inquiry",["OpportunityID","Document Type","Inquiry No / RFQ No","Scope Note","Inquiry Date","Inquiry Submission Date","Submitted","Project Name","Opportunity Type","Year"]],
-    ["Client",["Client","Contact Person","Telephone","Region","Location","Consultant","End User","Client Inquiry Status"]],
-    ["Ownership & status",["Employee","How Found Type","Closed","Status of Call","Last Call Date","Next Call Date","Proposal Status","Client Project Status"]],
-    ["Supplier offer",["Principle / Supplier Name","Supplier Offer #","Supplier Offer Date","Supplier Validity Date","Supplier Offer Value","Supplier Total","Supplier Offer Attachment"]],
-    ["TPS offer",["Offer #","Offer Date","Offer Validity Date","Submittal Date","TPS Offer","Currency","Offer Attachment","Pricing Sheet","Scope of Work","Equipment"]],
-    ["Client order",["Client Order No","Client Order Date","Order Value","Client Delivery Date","SO No","Client PO","TPS Order","TPS Order Date"]],
-    ["Terms",["Payment Terms","Delivery Terms","Delay Penalty","Leakage Test","Supervision on Installation","Insurance","Project Milestone & Payments"]],
-    ["Costs",["Shipping","Packing & Loading","Installation","L/C Cost","Financing","Customs","Saber","Clearance","Transportation","Other Expenses","Total Expenses"]],
-    ["Pricing & margin",["Margin","Margin %","Negotiation","Negotiation %","Total Margin","Total Cost","Total Price","VAT","Total with VAT","Total Profit","Profit"]],
-    ["Logistics",["No. of Trucks","Truck Type","Truck Fees","Total Truck Cost","Supervision","Late Delivery"]],
-    ["History & documents",["Comments","Comment Date","History","Notes","Email","Attachments"]],
-  ]},
-  {name:"Daily Tasks",source:"Opportunities Extended-99",count:171,icon:"TS",color:"yellow",groups:[
-    ["Daily update",["Project Name","Task Type","Client","Employee","Project Status","Opportunity Stage","Done","Last Call","Next Call","Call Again"]],
-    ["Inquiry & offer",["RFQ No","Inquiry Date","Principle Offer #","Principle Offer Date","TPS Offer #","TPS Offer Date","Submission Date","Offer Value"]],
-    ["Project parties",["Principle Name","Consultant","End User","Contact Name","Mobile #","Region","Location"]],
-    ["Notes",["Project Scope","Comments","Notes","Attachments"]],
-  ]},
-  {name:"Project Status",source:"Projects / Opportunities",count:66,icon:"PR",color:"pink",groups:[
-    ["Project",["ProjectID","Project Name","Client","Project Type","Start Date","End Date","Estimated End Date","Delay","Actual Revenue","Currency"]],
-    ["Offer tracking",["RFQ No","Project Status","Opportunity Stage","Principle Name","Principle Offer #","TPS Offer #","Offer Date","Next Call","End User","Consultant"]],
-    ["Delivery",["Client PO","SO No","Delivery Terms","Project Milestone & Payments","Scope of Work","Notes","Attachments"]],
-  ]},
-  {name:"Supplier List",source:"Suppliers Extended",count:73,icon:"SU",color:"teal",groups:[
-    ["Supplier",["Supplier ID","Supplier Name","Account Number","Account Type","Supplier Scope","Phone","Mobile Phone","Fax","Email","Website"]],
-    ["Address",["Address","City","Province","Postal Code","Country / Region","Delivery Address","Delivery City","Delivery Province","Delivery Postal","Delivery Country"]],
-    ["Follow-up",["Call Status","Call Date","Next Call","Notes","Attachments"]],
-  ]},
-  {name:"Activity Details",source:"Activities Extended",count:1,icon:"AC",color:"magenta",groups:[
-    ["General",["ActivityID","Company","Activity Type","Activity Date","Description"]], ["Notes & files",["Notes","Attachments"]],
-  ]},
-  {name:"Employee Details",source:"Employees Extended",count:1,icon:"EM",color:"indigo",groups:[
-    ["General",["Employee ID","First Name","Last Name","Company","Job Title","E-mail Address","Web Page"]],
-    ["Phone numbers",["Business Phone","Home Phone","Mobile Phone","Fax Number"]],
-    ["Address",["Street","City","State / Province","ZIP / Postal Code","Country / Region"]],
-    ["Notes & files",["Notes","Attachments"]],
-  ]},
-  {name:"End Users",source:"END USERS",count:28,icon:"EU",color:"orange",groups:[["End user",["ID","END USER"]]]},
-  {name:"Reports",source:"Access Reports",count:10,icon:"RP",color:"red",groups:[
-    ["Client & contact",["Client Listing","Clients","Contact Phone Book","Contact Directory"]],
-    ["Employees",["Employee Address Book","Employee Phone Book"]],
-    ["Opportunities",["Opportunities by Suppliers","Opportunities by Accounts","Opportunities by Date","Opportunities Extended"]],
-  ]},
+    { name: "Client List", source: "Accounts", count: 338, icon: "CU", color: "purple", groups: [
+            ["Identity", ["AccountID", "Account Name", "Account Name - Arabic", "Account Number", "Account Type", "Category", "Handled by", "FLAG"]],
+            ["Contact", ["Phone", "Mobile Phone", "Fax", "Email", "Website"]],
+            ["Main address", ["Address", "City", "Province", "Postal Code", "Country / Region"]],
+            ["Billing address", ["Billing Street", "Billing City", "Billing Postal", "Billing Country"]],
+            ["Shipping address", ["Shipping Street", "Shipping City", "Shipping Postal", "Shipping Country"]],
+            ["Follow-up", ["Call Status", "Call Date / Visit Date", "Next Call / Next Visit", "Comments", "Notes", "Attachments"]],
+            ["Registration & tax", ["CR NO", "CR DATE", "CR VALIDITY", "CR COPY", "VAT NO", "VAT COPY", "NATIONAL ADDRESS"]],
+            ["Commercial", ["Supplier Scope", "Scope of work", "Client LOGO"]],
+        ] },
+    { name: "Contact Details", source: "Contacts Extended", count: 986, icon: "CO", color: "cyan", groups: [
+            ["General", ["ContactID", "First Name", "Last Name", "Full Name", "Company", "Job Title", "Department", "Project Name", "Category", "FLAG"]],
+            ["Phone numbers", ["Business Phone", "Home Phone", "Mobile Phone", "Fax Number"]],
+            ["Address", ["Street", "City", "Province", "ZIP / Postal Code", "Country / Region"]],
+            ["Online & notes", ["E-mail Address", "Web Page", "Notes", "Attachments"]],
+        ] },
+    { name: "Maintain Offers", source: "Opportunities Extended", count: 171, icon: "OP", color: "green", groups: [
+            ["Inquiry", ["OpportunityID", "Document Type", "Inquiry No / RFQ No", "Scope Note", "Inquiry Date", "Inquiry Submission Date", "Submitted", "Project Name", "Opportunity Type", "Year"]],
+            ["Client", ["Client", "Contact Person", "Telephone", "Region", "Location", "Consultant", "End User", "Client Inquiry Status"]],
+            ["Ownership & status", ["Employee", "How Found Type", "Closed", "Status of Call", "Last Call Date", "Next Call Date", "Proposal Status", "Client Project Status"]],
+            ["Supplier offer", ["Principle / Supplier Name", "Supplier Offer #", "Supplier Offer Date", "Supplier Validity Date", "Supplier Offer Value", "Supplier Total", "Supplier Offer Attachment"]],
+            ["TPS offer", ["Offer #", "Offer Date", "Offer Validity Date", "Submittal Date", "TPS Offer", "Currency", "Offer Attachment", "Pricing Sheet", "Scope of Work", "Equipment"]],
+            ["Client order", ["Client Order No", "Client Order Date", "Order Value", "Client Delivery Date", "SO No", "Client PO", "TPS Order", "TPS Order Date"]],
+            ["Terms", ["Payment Terms", "Delivery Terms", "Delay Penalty", "Leakage Test", "Supervision on Installation", "Insurance", "Project Milestone & Payments"]],
+            ["Costs", ["Shipping", "Packing & Loading", "Installation", "L/C Cost", "Financing", "Customs", "Saber", "Clearance", "Transportation", "Other Expenses", "Total Expenses"]],
+            ["Pricing & margin", ["Margin", "Margin %", "Negotiation", "Negotiation %", "Total Margin", "Total Cost", "Total Price", "VAT", "Total with VAT", "Total Profit", "Profit"]],
+            ["Logistics", ["No. of Trucks", "Truck Type", "Truck Fees", "Total Truck Cost", "Supervision", "Late Delivery"]],
+            ["History & documents", ["Comments", "Comment Date", "History", "Notes", "Email", "Attachments"]],
+        ] },
+    { name: "Daily Tasks", source: "Opportunities Extended-99", count: 171, icon: "TS", color: "yellow", groups: [
+            ["Daily update", ["Project Name", "Task Type", "Client", "Employee", "Project Status", "Opportunity Stage", "Done", "Last Call", "Next Call", "Call Again"]],
+            ["Inquiry & offer", ["RFQ No", "Inquiry Date", "Principle Offer #", "Principle Offer Date", "TPS Offer #", "TPS Offer Date", "Submission Date", "Offer Value"]],
+            ["Project parties", ["Principle Name", "Consultant", "End User", "Contact Name", "Mobile #", "Region", "Location"]],
+            ["Notes", ["Project Scope", "Comments", "Notes", "Attachments"]],
+        ] },
+    { name: "Project Status", source: "Projects / Opportunities", count: 66, icon: "PR", color: "pink", groups: [
+            ["Project", ["ProjectID", "Project Name", "Client", "Project Type", "Start Date", "End Date", "Estimated End Date", "Delay", "Actual Revenue", "Currency"]],
+            ["Offer tracking", ["RFQ No", "Project Status", "Opportunity Stage", "Principle Name", "Principle Offer #", "TPS Offer #", "Offer Date", "Next Call", "End User", "Consultant"]],
+            ["Delivery", ["Client PO", "SO No", "Delivery Terms", "Project Milestone & Payments", "Scope of Work", "Notes", "Attachments"]],
+        ] },
+    { name: "Supplier List", source: "Suppliers Extended", count: 73, icon: "SU", color: "teal", groups: [
+            ["Supplier", ["Supplier ID", "Supplier Name", "Account Number", "Account Type", "Supplier Scope", "Phone", "Mobile Phone", "Fax", "Email", "Website"]],
+            ["Address", ["Address", "City", "Province", "Postal Code", "Country / Region", "Delivery Address", "Delivery City", "Delivery Province", "Delivery Postal", "Delivery Country"]],
+            ["Follow-up", ["Call Status", "Call Date", "Next Call", "Notes", "Attachments"]],
+        ] },
+    { name: "Activity Details", source: "Activities Extended", count: 1, icon: "AC", color: "magenta", groups: [
+            ["General", ["ActivityID", "Company", "Activity Type", "Activity Date", "Description"]], ["Notes & files", ["Notes", "Attachments"]],
+        ] },
+    { name: "Employee Details", source: "Employees Extended", count: 1, icon: "EM", color: "indigo", groups: [
+            ["General", ["Employee ID", "First Name", "Last Name", "Company", "Job Title", "E-mail Address", "Web Page"]],
+            ["Phone numbers", ["Business Phone", "Home Phone", "Mobile Phone", "Fax Number"]],
+            ["Address", ["Street", "City", "State / Province", "ZIP / Postal Code", "Country / Region"]],
+            ["Notes & files", ["Notes", "Attachments"]],
+        ] },
+    { name: "End Users", source: "END USERS", count: 28, icon: "EU", color: "orange", groups: [["End user", ["ID", "END USER"]]] },
+    { name: "Reports", source: "Access Reports", count: 10, icon: "RP", color: "red", groups: [
+            ["Client & contact", ["Client Listing", "Clients", "Contact Phone Book", "Contact Directory"]],
+            ["Employees", ["Employee Address Book", "Employee Phone Book"]],
+            ["Opportunities", ["Opportunities by Suppliers", "Opportunities by Accounts", "Opportunities by Date", "Opportunities Extended"]],
+        ] },
 ];
